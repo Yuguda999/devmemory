@@ -1,0 +1,64 @@
+[project]
+name = "devmemory"
+version = "0.1.0"
+description = "Universal Dev Memory — A persistent MCP server for cross-tool coding context"
+readme = "README.md"
+authors = [
+    { name = "yuguda", email = "elemenx93@gmail.com" }
+]
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["mcp", "memory", "context", "coding", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0,<3.0",
+    "aiosqlite>=0.20.0",
+    "alembic>=1.13.0",
+    "pydantic>=2.0,<3.0",
+    "pydantic-settings>=2.0,<3.0",
+    "python-dotenv>=1.0.0",
+    "bcrypt>=4.0.0",
+    "pyjwt>=2.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+postgres = [
+    "asyncpg>=0.29.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+plugins = ["pydantic.mypy"]
