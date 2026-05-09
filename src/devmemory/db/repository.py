@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from devmemory.auth.hashing import hash_api_key, hash_password
 from devmemory.models import (
@@ -67,6 +68,19 @@ async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
 async def get_user_by_id(session: AsyncSession, user_id: str) -> User | None:
     """Find a user by ID."""
     result = await session.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def get_user_with_subscription(session: AsyncSession, user_id: str) -> User | None:
+    """Find a user by ID with subscription eagerly loaded.
+
+    Use this when you need to access ``user.subscription`` outside the session.
+    """
+    result = await session.execute(
+        select(User)
+        .where(User.id == user_id)
+        .options(selectinload(User.subscription))
+    )
     return result.scalar_one_or_none()
 
 
