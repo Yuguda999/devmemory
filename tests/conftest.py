@@ -8,6 +8,7 @@ from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from devmemory.models import Base
@@ -27,8 +28,20 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="session")
 async def engine():
-    """Create a test engine with all tables."""
+    """Create a test engine with all tables.
+
+    Enables ``PRAGMA foreign_keys = ON`` for SQLite so that
+    ``ON DELETE CASCADE`` works correctly in tests.
+    """
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+
+    # SQLite ignores ON DELETE CASCADE unless foreign_keys is enabled.
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
