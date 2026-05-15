@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from devmemory.auth.hashing import hash_api_key, hash_password
 from devmemory.models import (
     ApiKey,
+    ContextBlock,
     Project,
     Session,
     Subscription,
@@ -208,3 +209,299 @@ async def list_projects(session: AsyncSession, user_id: str) -> list[Project]:
         .order_by(Project.updated_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def get_project_by_id(
+    session: AsyncSession, project_id: str, user_id: str,
+) -> Project | None:
+    """Get a single project by ID, scoped to user."""
+    result = await session.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+# ── Session Operations ─────────────────────────────────────────
+
+
+async def create_session(
+    session: AsyncSession,
+    user_id: str,
+    project_id: str,
+    title: str,
+    tool_source: str,
+) -> Session | None:
+    """Create a new development session within a project.
+
+    Verifies the project belongs to the user before creating.
+
+    Args:
+        session: The async database session.
+        user_id: The owning user's ID (for ownership check).
+        project_id: The project to attach the session to.
+        title: Human-readable session title.
+        tool_source: Which AI tool created this session.
+
+    Returns:
+        The newly created Session, or None if project not owned by user.
+    """
+    # Verify ownership
+    project = await get_project_by_id(session, project_id, user_id)
+    if project is None:
+        return None
+
+    dev_session = Session(
+        project_id=project_id,
+        title=title.strip(),
+        tool_source=tool_source.strip().lower(),
+    )
+    session.add(dev_session)
+    await session.flush()
+    return dev_session
+
+
+async def get_session(
+    session: AsyncSession, session_id: str, user_id: str,
+) -> Session | None:
+    """Get a session by ID with context blocks eagerly loaded.
+
+    Enforces user ownership via the project relationship.
+    """
+    result = await session.execute(
+        select(Session)
+        .join(Project, Session.project_id == Project.id)
+        .where(Session.id == session_id, Project.user_id == user_id)
+        .options(
+            selectinload(Session.context_blocks),
+            selectinload(Session.project),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def list_sessions(
+    session: AsyncSession,
+    user_id: str,
+    project_id: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> list[Session]:
+    """List sessions for a user, optionally filtered by project and status.
+
+    Args:
+        session: The async database session.
+        user_id: The owning user's ID.
+        project_id: Optional project filter.
+        status: Optional status filter (active, paused, completed, archived).
+        limit: Maximum number of sessions to return.
+
+    Returns:
+        List of sessions, ordered by most recently updated first.
+    """
+    stmt = (
+        select(Session)
+        .join(Project, Session.project_id == Project.id)
+        .where(Project.user_id == user_id)
+    )
+    if project_id is not None:
+        stmt = stmt.where(Session.project_id == project_id)
+    if status is not None:
+        stmt = stmt.where(Session.status == status)
+
+    stmt = stmt.order_by(Session.updated_at.desc()).limit(limit)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def update_session(
+    session: AsyncSession,
+    session_id: str,
+    user_id: str,
+    status: str | None = None,
+    title: str | None = None,
+) -> Session | None:
+    """Update a session's status and/or title.
+
+    Enforces user ownership via the project relationship.
+
+    Returns:
+        The updated Session, or None if not found or not owned by user.
+    """
+    dev_session = await get_session(session, session_id, user_id)
+    if dev_session is None:
+        return None
+
+    if status is not None:
+        dev_session.status = status
+    if title is not None:
+        dev_session.title = title.strip()
+
+    await session.flush()
+    return dev_session
+
+
+# ── Context Block Operations ───────────────────────────────────
+
+
+async def create_context_block(
+    session: AsyncSession,
+    session_id: str,
+    user_id: str,
+    block_type: str,
+    content: str,
+    meta_json: str | None = None,
+    priority: int = 5,
+) -> ContextBlock | None:
+    """Save a single context block to a session.
+
+    Verifies user ownership of the session's parent project.
+
+    Args:
+        session: The async database session.
+        session_id: The session to attach the block to.
+        user_id: The owning user's ID (for ownership check).
+        block_type: One of the BlockType enum values.
+        content: The context content text.
+        meta_json: Optional JSON-encoded metadata string.
+        priority: Priority for resume prompt ordering (1-10, default 5).
+
+    Returns:
+        The newly created ContextBlock, or None if session not accessible.
+    """
+    # Verify session ownership
+    dev_session = await get_session(session, session_id, user_id)
+    if dev_session is None:
+        return None
+
+    block = ContextBlock(
+        session_id=session_id,
+        block_type=block_type,
+        content=content,
+        meta_json=meta_json,
+        priority=priority,
+    )
+    session.add(block)
+    await session.flush()
+    return block
+
+
+async def create_bulk_context_blocks(
+    session: AsyncSession,
+    session_id: str,
+    user_id: str,
+    blocks: list[dict],
+) -> list[ContextBlock] | None:
+    """Save multiple context blocks to a session in one call.
+
+    Each dict in *blocks* must have at minimum ``block_type`` and ``content``.
+    Optional keys: ``meta_json``, ``priority``.
+
+    Returns:
+        List of created ContextBlock objects, or None if session not accessible.
+    """
+    dev_session = await get_session(session, session_id, user_id)
+    if dev_session is None:
+        return None
+
+    created: list[ContextBlock] = []
+    for block_data in blocks:
+        block = ContextBlock(
+            session_id=session_id,
+            block_type=block_data["block_type"],
+            content=block_data["content"],
+            meta_json=block_data.get("meta_json"),
+            priority=block_data.get("priority", 5),
+        )
+        session.add(block)
+        created.append(block)
+
+    await session.flush()
+    return created
+
+
+async def get_context_blocks(
+    session: AsyncSession,
+    session_id: str,
+    user_id: str,
+    block_type: str | None = None,
+    limit: int = 100,
+) -> list[ContextBlock] | None:
+    """Retrieve context blocks for a session, optionally filtered by type.
+
+    Returns:
+        List of context blocks ordered by priority (desc) then created_at,
+        or None if the session is not accessible to the user.
+    """
+    # Verify session ownership
+    dev_session = await get_session(session, session_id, user_id)
+    if dev_session is None:
+        return None
+
+    stmt = select(ContextBlock).where(ContextBlock.session_id == session_id)
+    if block_type is not None:
+        stmt = stmt.where(ContextBlock.block_type == block_type)
+
+    stmt = (
+        stmt.order_by(ContextBlock.priority.desc(), ContextBlock.created_at.asc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def update_context_block(
+    session: AsyncSession,
+    block_id: str,
+    user_id: str,
+    content: str | None = None,
+    priority: int | None = None,
+) -> ContextBlock | None:
+    """Update a context block's content and/or priority.
+
+    Enforces user ownership by joining through session → project → user.
+
+    Returns:
+        The updated ContextBlock, or None if not found or not owned by user.
+    """
+    result = await session.execute(
+        select(ContextBlock)
+        .join(Session, ContextBlock.session_id == Session.id)
+        .join(Project, Session.project_id == Project.id)
+        .where(ContextBlock.id == block_id, Project.user_id == user_id)
+    )
+    block = result.scalar_one_or_none()
+    if block is None:
+        return None
+
+    if content is not None:
+        block.content = content
+    if priority is not None:
+        block.priority = priority
+
+    await session.flush()
+    return block
+
+
+async def delete_context_block(
+    session: AsyncSession, block_id: str, user_id: str,
+) -> bool:
+    """Delete a context block by ID.
+
+    Enforces user ownership by joining through session → project → user.
+
+    Returns:
+        True if the block was found and deleted, False otherwise.
+    """
+    result = await session.execute(
+        select(ContextBlock)
+        .join(Session, ContextBlock.session_id == Session.id)
+        .join(Project, Session.project_id == Project.id)
+        .where(ContextBlock.id == block_id, Project.user_id == user_id)
+    )
+    block = result.scalar_one_or_none()
+    if block is None:
+        return False
+
+    await session.delete(block)
+    await session.flush()
+    return True
