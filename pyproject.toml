@@ -4,21 +4,25 @@ version = "0.1.0"
 description = "Universal Dev Memory — A persistent MCP server for cross-tool coding context"
 readme = "README.md"
 authors = [
-    { name = "yuguda", email = "elemenx93@gmail.com" }
+    { name = "Yuguda Kolo", email = "elemenx93@gmail.com" }
 ]
 requires-python = ">=3.10"
 license = { text = "MIT" }
-keywords = ["mcp", "memory", "context", "coding", "ai"]
+keywords = ["mcp", "memory", "context", "coding", "ai", "llm", "developer-tools"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+    "Typing :: Typed",
 ]
+
 dependencies = [
     "sqlalchemy[asyncio]>=2.0,<3.0",
     "aiosqlite>=0.20.0",
@@ -34,6 +38,12 @@ dependencies = [
     "email-validator>=2.0.0",
     "mcp>=1.0.0",
 ]
+
+[project.urls]
+homepage = "https://devmemory.io"
+repository = "https://github.com/Yuguda999/devmemory"
+changelog = "https://github.com/Yuguda999/devmemory/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/Yuguda999/devmemory/issues"
 
 [project.optional-dependencies]
 dev = [

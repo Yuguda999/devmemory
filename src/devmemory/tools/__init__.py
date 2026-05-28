@@ -27,6 +27,13 @@ import json
 from mcp.server.fastmcp import FastMCP
 
 from devmemory.auth.mcp_auth import resolve_mcp_api_key
+from devmemory.billing.quota import (
+    QuotaExceededError,
+    check_block_quota,
+    check_project_quota,
+    check_session_quota,
+    get_usage_summary,
+)
 from devmemory.db.engine import get_db_session
 from devmemory.db.repository import (
     create_bulk_context_blocks,
@@ -124,9 +131,16 @@ async def save_context(
     async with get_db_session() as db:
         # ── Resolve / create project ──────────────────────────────────────────
         proj_info = await resolve_project_slug(cwd, explicit_project=project)
-        proj, _created = await get_or_create_project(
+        proj, proj_is_new = await get_or_create_project(
             db, user_id, proj_info.slug, name=proj_info.name, remote_url=proj_info.remote_url
         )
+
+        # ── Quota: new project ────────────────────────────────────────────────
+        if proj_is_new:
+            try:
+                await check_project_quota(db, user_id)
+            except QuotaExceededError as exc:
+                return _err(str(exc))
 
         # ── Resolve session ───────────────────────────────────────────────────
         if session_id:
@@ -134,6 +148,12 @@ async def save_context(
             if dev_session is None:
                 return _err(f"Session '{session_id}' not found or not accessible")
         else:
+            # ── Quota: new session ────────────────────────────────────────────
+            try:
+                await check_session_quota(db, user_id, str(proj.id))
+            except QuotaExceededError as exc:
+                return _err(str(exc))
+
             # Auto-create a session for this project
             dev_session = await create_session(
                 db,
@@ -145,6 +165,12 @@ async def save_context(
 
         if dev_session is None:
             return _err("Could not resolve or create a session")
+
+        # ── Quota: new block ──────────────────────────────────────────────────
+        try:
+            await check_block_quota(db, user_id, str(dev_session.id))
+        except QuotaExceededError as exc:
+            return _err(str(exc))
 
         # ── Save block ────────────────────────────────────────────────────────
         block = await create_context_block(
@@ -283,6 +309,19 @@ async def start_session(
         proj, proj_created = await get_or_create_project(
             db, user_id, proj_info.slug, name=proj_info.name, remote_url=proj_info.remote_url
         )
+
+        # ── Quota: new project ────────────────────────────────────────────────
+        if proj_created:
+            try:
+                await check_project_quota(db, user_id)
+            except QuotaExceededError as exc:
+                return _err(str(exc))
+
+        # ── Quota: new session ────────────────────────────────────────────────
+        try:
+            await check_session_quota(db, user_id, str(proj.id))
+        except QuotaExceededError as exc:
+            return _err(str(exc))
 
         dev_session = await create_session(
             db,
@@ -454,6 +493,9 @@ async def generate_resume_prompt(
 async def list_projects_tool(api_key: str | None = None) -> dict:
     """List all projects known to DevMemory for this account.
 
+    Also returns current usage vs tier limits so clients can surface
+    upgrade prompts when the user is near their quota.
+
     Args:
         api_key: DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
     """
@@ -464,6 +506,7 @@ async def list_projects_tool(api_key: str | None = None) -> dict:
 
     async with get_db_session() as db:
         projects = await list_projects(db, user_id)
+        usage = await get_usage_summary(db, user_id)
 
     return _ok(
         projects=[
@@ -478,4 +521,5 @@ async def list_projects_tool(api_key: str | None = None) -> dict:
             for p in projects
         ],
         count=len(projects),
+        quota=usage,
     )

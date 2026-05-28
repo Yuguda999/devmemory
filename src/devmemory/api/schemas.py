@@ -93,3 +93,101 @@ class ErrorResponse(BaseModel):
     """Error response body."""
 
     detail: str
+
+
+# ── Projects ───────────────────────────────────────────────────
+
+class ProjectResponse(BaseModel):
+    """A single project."""
+
+    id: str
+    slug: str
+    name: str
+    remote_url: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectListResponse(BaseModel):
+    """Paginated list of projects."""
+
+    projects: list[ProjectResponse]
+    count: int
+
+
+# ── Sessions ───────────────────────────────────────────────────
+
+class SessionResponse(BaseModel):
+    """A single session."""
+
+    id: str
+    project_id: str
+    title: str
+    status: str
+    tool_source: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SessionListResponse(BaseModel):
+    """List of sessions."""
+
+    sessions: list[SessionResponse]
+    count: int
+
+
+class UpdateSessionRequest(BaseModel):
+    """Partial update for a session: title and/or status."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    status: str | None = Field(
+        default=None,
+        description="One of: active, paused, completed, archived",
+    )
+
+
+# ── Context Blocks ─────────────────────────────────────────────
+
+class ContextBlockResponse(BaseModel):
+    """A single context block."""
+
+    id: str
+    session_id: str
+    block_type: str
+    content: str
+    priority: int
+    meta_json: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ContextBlockListResponse(BaseModel):
+    """List of context blocks for a session."""
+
+    blocks: list[ContextBlockResponse]
+    count: int
+
+
+# ── Billing ────────────────────────────────────────────────────
+
+class BillingLimits(BaseModel):
+    """Quota limits for the user's current tier."""
+
+    max_projects: int | None = Field(description="None means unlimited")
+    max_sessions_per_project: int | None
+    max_blocks_per_session: int | None
+
+
+class BillingUsage(BaseModel):
+    """Current usage counts."""
+
+    projects: int
+    total_sessions: int
+
+
+class BillingStatusResponse(BaseModel):
+    """Billing tier and usage summary."""
+
+    tier: str
+    limits: BillingLimits
+    usage: BillingUsage

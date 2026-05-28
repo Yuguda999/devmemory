@@ -61,9 +61,20 @@ class _Block:
 
 # ── Shared patch targets ───────────────────────────────────────────────────────
 
+
 _RESOLVE_KEY = "devmemory.tools.resolve_mcp_api_key"
 _RESOLVE_PROJ = "devmemory.tools.resolve_project_slug"
 _GET_DB = "devmemory.tools.get_db_session"
+_CHECK_PROJ_QUOTA = "devmemory.tools.check_project_quota"
+_CHECK_SESS_QUOTA = "devmemory.tools.check_session_quota"
+_CHECK_BLOCK_QUOTA = "devmemory.tools.check_block_quota"
+_GET_USAGE = "devmemory.tools.get_usage_summary"
+
+_USAGE_STUB = {
+    "tier": "free",
+    "limits": {"max_projects": 3, "max_sessions_per_project": 10, "max_blocks_per_session": 500},
+    "usage": {"projects": 1, "total_sessions": 1},
+}
 
 
 # ── Async context manager mock for get_db_session ──────────────────────────────
@@ -110,6 +121,9 @@ class TestSaveContext:
             patch("devmemory.tools.get_session", AsyncMock(return_value=sess)),
             patch("devmemory.tools.create_session", AsyncMock(return_value=sess)),
             patch("devmemory.tools.create_context_block", AsyncMock(return_value=block)),
+            patch(_CHECK_PROJ_QUOTA, AsyncMock(return_value=None)),
+            patch(_CHECK_SESS_QUOTA, AsyncMock(return_value=None)),
+            patch(_CHECK_BLOCK_QUOTA, AsyncMock(return_value=None)),
         ):
             yield
 
@@ -274,6 +288,8 @@ class TestStartSession:
             patch(_GET_DB, return_value=_fake_db()),
             patch("devmemory.tools.get_or_create_project", AsyncMock(return_value=(proj, True))),
             patch("devmemory.tools.create_session", AsyncMock(return_value=sess)),
+            patch(_CHECK_PROJ_QUOTA, AsyncMock(return_value=None)),
+            patch(_CHECK_SESS_QUOTA, AsyncMock(return_value=None)),
         ):
             result = await start_session(
                 title="Implement auth",
@@ -389,12 +405,14 @@ class TestListProjectsTool:
             patch(_RESOLVE_KEY, AsyncMock(return_value="user-uuid")),
             patch(_GET_DB, return_value=_fake_db()),
             patch("devmemory.tools.list_projects", AsyncMock(return_value=projects)),
+            patch(_GET_USAGE, AsyncMock(return_value=_USAGE_STUB)),
         ):
             result = await list_projects_tool()
 
         assert result["ok"] is True
         assert result["count"] == 2
         assert result["projects"][0]["slug"] == "a-b"
+        assert result["quota"]["tier"] == "free"
 
     async def test_empty_returns_ok_with_empty_list(self):
         from devmemory.tools import list_projects_tool
@@ -403,11 +421,13 @@ class TestListProjectsTool:
             patch(_RESOLVE_KEY, AsyncMock(return_value="user-uuid")),
             patch(_GET_DB, return_value=_fake_db()),
             patch("devmemory.tools.list_projects", AsyncMock(return_value=[])),
+            patch(_GET_USAGE, AsyncMock(return_value=_USAGE_STUB)),
         ):
             result = await list_projects_tool()
 
         assert result["ok"] is True
         assert result["projects"] == []
+        assert "quota" in result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
