@@ -85,6 +85,7 @@ export function renderLogin(container) {
         password: document.getElementById('login-password').value,
       });
       setAuth(data.access_token, { id: data.user_id, email: data.email });
+      if (window.__buildSidebar) window.__buildSidebar();
       window.location.hash = '#dashboard';
     } catch (err) {
       showErr(err.message);

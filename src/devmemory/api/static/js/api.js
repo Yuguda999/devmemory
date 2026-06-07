@@ -32,6 +32,19 @@ export async function detectMode() {
       }
     } catch { /* ignore — user will be prompted to login manually */ }
   }
+
+  // In SaaS mode: validate any existing token from a previous session
+  if (!state.selfHosted && state.token) {
+    try {
+      const r = await fetch(`${BASE}/billing/status`, {
+        headers: { 'Authorization': `Bearer ${state.token}` },
+      });
+      if (r.status === 401) {
+        // Stale or invalid token — clear auth so login page shows
+        clearAuth();
+      }
+    } catch { /* network error — keep token, let views handle errors */ }
+  }
 }
 
 /** Core fetch wrapper */
@@ -46,7 +59,7 @@ async function req(method, path, body) {
   });
 
   if (res.status === 401) {
-    // Token expired — clear and reload
+    // Token expired — clear and redirect to login
     logout();
     return;
   }
@@ -74,12 +87,19 @@ export function setAuth(token, user) {
   localStorage.setItem('dm_user', JSON.stringify(user));
 }
 
-export function logout() {
+/** Clear auth state without triggering navigation (used by detectMode) */
+function clearAuth() {
   state.token = null;
   state.user  = null;
   localStorage.removeItem('dm_token');
   localStorage.removeItem('dm_user');
+}
+
+export function logout() {
+  clearAuth();
   window.location.hash = '#login';
+  // Trigger full re-init so sidebar rebuilds without the sign-out button
+  window.location.reload();
 }
 
 export function isLoggedIn() {

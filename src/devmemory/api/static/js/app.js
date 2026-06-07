@@ -16,12 +16,12 @@ const ROUTES = {
   '#billing':   { label: 'Billing',   render: renderBilling,   icon: 'credit-card' },
 };
 
-async function init() {
-  await detectMode();
-
-  // Build sidebar
+/** Build or rebuild the sidebar to reflect current auth state */
+function buildSidebar() {
   const sidebar = document.getElementById('sidebar');
   const navItems = Object.entries(ROUTES).filter(([,r]) => r.nav !== false);
+
+  const showSignOut = isLoggedIn() && !state.selfHosted;
 
   sidebar.innerHTML = `
     <div class="sidebar-logo">
@@ -34,8 +34,8 @@ async function init() {
         <button class="nav-link" data-route="${hash}" id="nav-${hash.slice(1)}">
           <span class="nav-icon">${icon(r.icon, 16)}</span>${r.label}
         </button>`).join('')}
-      <hr class="divider">
-      ${isLoggedIn() && !state.selfHosted ? `
+      ${showSignOut ? `
+        <hr class="divider">
         <button class="nav-link" id="btn-logout" style="color:var(--red)">
           <span class="nav-icon">${icon('log-out', 16)}</span>Sign Out
         </button>` : ''}
@@ -55,7 +55,17 @@ async function init() {
   document.querySelectorAll('.nav-link[data-route]').forEach(btn => {
     btn.addEventListener('click', () => { window.location.hash = btn.dataset.route; });
   });
-  document.getElementById('btn-logout')?.addEventListener('click', () => { if (confirm('Sign out?')) logout(); });
+  document.getElementById('btn-logout')?.addEventListener('click', () => {
+    if (confirm('Sign out?')) logout();
+  });
+}
+
+// Expose buildSidebar for login.js to call after successful login
+window.__buildSidebar = buildSidebar;
+
+async function init() {
+  await detectMode();
+  buildSidebar();
 
   // Route on hash change
   window.addEventListener('hashchange', route);
@@ -81,6 +91,7 @@ function route() {
     b.classList.toggle('active', b.dataset.route === hash);
   });
 
+  const sidebar = document.getElementById('sidebar');
   const main = document.getElementById('main');
   if (hash === '#login') {
     // Login fills entire viewport — remove sidebar layout
