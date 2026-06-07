@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from devmemory.config import settings
 from devmemory.db.engine import close_db, init_db
+
+_STATIC_DIR = Path(__file__).parent / "static"
+_INDEX_HTML = _STATIC_DIR / "index.html"
 
 
 @asynccontextmanager
@@ -64,7 +70,20 @@ def create_app() -> FastAPI:
 
     # ── Health Check ───────────────────────────────────────────
     @app.get("/health", tags=["system"], summary="Health check")
-    async def health() -> dict[str, str]:
-        return {"status": "ok", "version": "0.1.0"}
+    async def health() -> dict[str, str | bool]:
+        return {
+            "status": "ok",
+            "version": "0.1.0",
+            "self_hosted": settings.is_self_hosted,
+            "deployment_mode": settings.deployment_mode,
+        }
+
+    # ── Static Files + SPA ─────────────────────────────────────
+    if _STATIC_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+        @app.get("/", include_in_schema=False)
+        async def serve_spa() -> FileResponse:
+            return FileResponse(str(_INDEX_HTML))
 
     return app

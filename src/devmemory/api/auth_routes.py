@@ -19,6 +19,7 @@ from devmemory.api.schemas import (
 from devmemory.auth.hashing import generate_api_key, verify_password
 from devmemory.auth.jwt_utils import create_access_token
 from devmemory.auth.middleware import AuthContext, require_jwt_user
+from devmemory.config import settings
 from devmemory.db.engine import get_db_session
 from devmemory.db.repository import (
     create_api_key_record,
@@ -29,6 +30,48 @@ from devmemory.db.repository import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_GUEST_EMAIL    = "admin@localhost"
+_GUEST_PASSWORD = "self-hosted-local-instance"
+_GUEST_NAME     = "Local Admin"
+
+
+# ── Self-Hosted Guest Token ────────────────────────────────────
+
+@router.post(
+    "/guest-token",
+    response_model=LoginResponse,
+    summary="Get a guest token (self-hosted mode only)",
+    responses={403: {"description": "Only available in self-hosted mode"}},
+)
+async def guest_token() -> LoginResponse:
+    """Return a JWT for the local admin user without requiring credentials.
+
+    Only available when ``DEVMEMORY_DEPLOYMENT_MODE=self-hosted``.
+    The local admin account is created automatically on first call.
+    """
+    if not settings.is_self_hosted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Guest token is only available in self-hosted mode",
+        )
+
+    async with get_db_session() as session:
+        user = await get_user_by_email(session, _GUEST_EMAIL)
+        if user is None:
+            try:
+                user = await create_user(
+                    session=session,
+                    email=_GUEST_EMAIL,
+                    password=_GUEST_PASSWORD,
+                    display_name=_GUEST_NAME,
+                )
+            except Exception:
+                # Race condition — fetch again
+                user = await get_user_by_email(session, _GUEST_EMAIL)
+
+    token = create_access_token(user_id=user.id, email=user.email)
+    return LoginResponse(access_token=token, user_id=user.id, email=user.email)
 
 
 # ── Registration ───────────────────────────────────────────────
