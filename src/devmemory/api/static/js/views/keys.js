@@ -69,6 +69,24 @@ export async function renderKeys(container) {
     }
   });
 
+  // Attach revoke handler ONCE on the stable container (not inside loadKeys)
+  document.getElementById('keys-body').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-revoke-key]');
+    if (!btn) return;
+    if (!confirm('Revoke this API key? This cannot be undone.')) return;
+    btn.disabled = true;
+    btn.textContent = 'Revoking…';
+    try {
+      await api.delete(`/auth/api-keys/${btn.dataset.revokeKey}`);
+      toast('Key revoked');
+      loadKeys();
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Revoke';
+    }
+  });
+
   async function loadKeys() {
     const body = document.getElementById('keys-body');
     body.innerHTML = spinner();
@@ -105,18 +123,6 @@ export async function renderKeys(container) {
           </div>
         </div>
       `;
-
-      body.addEventListener('click', async e => {
-        const btn = e.target.closest('[data-revoke-key]');
-        if (!btn) return;
-        if (!confirm('Revoke this API key? This cannot be undone.')) return;
-        try {
-          await api.delete(`/auth/api-keys/${btn.dataset.revokeKey}`);
-          toast('Key revoked');
-          loadKeys();
-        } catch (err) { toast(err.message, 'error'); }
-      });
-
     } catch (err) {
       body.innerHTML = emptyState('alert-triangle', 'Failed to load keys', err.message);
     }
