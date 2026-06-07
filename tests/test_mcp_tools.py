@@ -119,6 +119,7 @@ class TestSaveContext:
             patch(_GET_DB, return_value=fake_db),
             patch("devmemory.tools.get_or_create_project", AsyncMock(return_value=(proj, False))),
             patch("devmemory.tools.get_session", AsyncMock(return_value=sess)),
+            patch("devmemory.tools.list_sessions", AsyncMock(return_value=[sess])),
             patch("devmemory.tools.create_session", AsyncMock(return_value=sess)),
             patch("devmemory.tools.create_context_block", AsyncMock(return_value=block)),
             patch(_CHECK_PROJ_QUOTA, AsyncMock(return_value=None)),
@@ -141,7 +142,8 @@ class TestSaveContext:
         assert "block_id" in result
         assert "session_id" in result
 
-    async def test_save_without_session_id_auto_creates(self, _patches):
+    async def test_save_without_session_id_reuses_active_session(self, _patches):
+        """When an active session exists, save_context should reuse it."""
         from devmemory.tools import save_context
 
         result = await save_context(
@@ -150,6 +152,41 @@ class TestSaveContext:
             cwd="/home/user/myproject",
         )
         assert result["ok"] is True
+        # Should reuse the existing session from the fixture, not create a new one
+        assert result["session_id"] == "sess-uuid-1"
+
+    async def test_save_without_session_id_creates_when_none_active(self):
+        """When no active session exists, save_context should create one."""
+        from devmemory.tools import save_context
+
+        proj = _Project()
+        new_sess = _Session(id="sess-new-auto")
+        block = _Block()
+        fake_db = _fake_db()
+
+        with (
+            patch(_RESOLVE_KEY, AsyncMock(return_value="user-uuid")),
+            patch(_RESOLVE_PROJ, AsyncMock(return_value=MagicMock(
+                slug="user-myproject", name="myproject", remote_url=None
+            ))),
+            patch(_GET_DB, return_value=fake_db),
+            patch("devmemory.tools.get_or_create_project", AsyncMock(return_value=(proj, False))),
+            patch("devmemory.tools.list_sessions", AsyncMock(return_value=[])),
+            patch("devmemory.tools.create_session", AsyncMock(return_value=new_sess)) as mock_create,
+            patch("devmemory.tools.create_context_block", AsyncMock(return_value=block)),
+            patch(_CHECK_PROJ_QUOTA, AsyncMock(return_value=None)),
+            patch(_CHECK_SESS_QUOTA, AsyncMock(return_value=None)),
+            patch(_CHECK_BLOCK_QUOTA, AsyncMock(return_value=None)),
+        ):
+            result = await save_context(
+                block_type="goal",
+                content="Start fresh",
+                cwd="/home/user/myproject",
+            )
+
+        assert result["ok"] is True
+        assert result["session_id"] == "sess-new-auto"
+        mock_create.assert_called_once()
 
     async def test_invalid_block_type_returns_error(self):
         from devmemory.tools import save_context

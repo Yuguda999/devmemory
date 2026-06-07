@@ -148,20 +148,28 @@ async def save_context(
             if dev_session is None:
                 return _err(f"Session '{session_id}' not found or not accessible")
         else:
-            # ── Quota: new session ────────────────────────────────────────────
-            try:
-                await check_session_quota(db, user_id, str(proj.id))
-            except QuotaExceededError as exc:
-                return _err(str(exc))
-
-            # Auto-create a session for this project
-            dev_session = await create_session(
-                db,
-                user_id=user_id,
-                project_id=str(proj.id),
-                title=f"Auto-session ({proj_info.name})",
-                tool_source="devmemory-mcp",
+            # Try to reuse the latest active session for this project so that
+            # different AI tools converge on the same session automatically.
+            active = await list_sessions(
+                db, user_id, project_id=str(proj.id), status="active", limit=1,
             )
+            if active:
+                dev_session = active[0]
+            else:
+                # ── Quota: new session ────────────────────────────────────────
+                try:
+                    await check_session_quota(db, user_id, str(proj.id))
+                except QuotaExceededError as exc:
+                    return _err(str(exc))
+
+                # No active session exists — create one
+                dev_session = await create_session(
+                    db,
+                    user_id=user_id,
+                    project_id=str(proj.id),
+                    title=f"Auto-session ({proj_info.name})",
+                    tool_source="devmemory-mcp",
+                )
 
         if dev_session is None:
             return _err("Could not resolve or create a session")
@@ -476,6 +484,7 @@ async def generate_resume_prompt(
         session_title=dev_session.title,
         blocks=blocks,
         target_tool=target_tool,
+        session_id=session_id,
     )
 
     return _ok(

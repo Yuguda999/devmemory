@@ -149,3 +149,14 @@ class TestGenerateResumePrompt:
         assert "Step A" in prompt
         assert "Step B" in prompt
         assert "Step C" in prompt
+
+    def test_session_id_embedded_in_prompt(self):
+        prompt = generate_resume_prompt(
+            "proj", "My Session", [], session_id="abc-123-def"
+        )
+        assert "## DevMemory Session ID: abc-123-def" in prompt
+        assert "save_context" in prompt  # usage hint present
+
+    def test_session_id_none_omits_line(self):
+        prompt = generate_resume_prompt("proj", "My Session", [], session_id=None)
+        assert "DevMemory Session ID" not in prompt

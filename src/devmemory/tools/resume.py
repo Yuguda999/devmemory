@@ -75,6 +75,7 @@ def generate_resume_prompt(
     session_title: str,
     blocks: list["ContextBlock"],
     target_tool: str = "generic",
+    session_id: str | None = None,
 ) -> str:
     """Assemble context blocks into a structured resume prompt.
 
@@ -83,6 +84,7 @@ def generate_resume_prompt(
         session_title: Human-readable session title.
         blocks: Context blocks, ordered by priority DESC then created_at ASC.
         target_tool: One of ``claude``, ``cursor``, ``windsurf``, or ``generic``.
+        session_id: Optional session ID to embed for cross-tool continuity.
 
     Returns:
         A formatted multi-line string ready to be pasted into an AI tool.
@@ -104,8 +106,15 @@ def generate_resume_prompt(
         "",
         f"## Project: {project_name}",
         f"## Session: {session_title}",
-        "",
     ]
+    if session_id:
+        lines.append(f"## DevMemory Session ID: {session_id}")
+        lines.append(
+            "> Pass this session_id to DevMemory tools "
+            "(e.g. `save_context(session_id=\"{session_id}\")`) "
+            "to continue this exact session."
+        )
+    lines.append("")
 
     # Render known sections in canonical order
     for section in _SECTIONS:
