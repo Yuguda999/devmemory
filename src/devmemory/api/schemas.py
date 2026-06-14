@@ -158,7 +158,7 @@ class ContextBlockResponse(BaseModel):
     priority: int
     meta_json: str | None
     created_at: datetime
-    updated_at: datetime
+    updated_at: datetime | None
 
 
 class ContextBlockListResponse(BaseModel):

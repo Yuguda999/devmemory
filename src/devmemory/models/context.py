@@ -9,6 +9,7 @@ from enum import Enum
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from sqlalchemy import event
 from devmemory.models.base import Base, UUIDPrimaryKeyMixin, _utcnow
 
 
@@ -54,6 +55,9 @@ class ContextBlock(UUIDPrimaryKeyMixin, Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False,
     )
 
     # ── Relationships ───────────────────────────────────────────
