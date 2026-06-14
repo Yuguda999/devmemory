@@ -6,6 +6,7 @@ import { renderProjects }  from './views/projects.js';
 import { renderSessions }  from './views/sessions.js';
 import { renderKeys }      from './views/keys.js';
 import { renderBilling }   from './views/billing.js';
+import { renderSetup }     from './views/setup.js';
 
 const ROUTES = {
   '#login':     { label: 'Login',     render: renderLogin,    nav: false },
@@ -13,6 +14,7 @@ const ROUTES = {
   '#projects':  { label: 'Projects',  render: renderProjects,  icon: 'folder-git-2' },
   '#sessions':  { label: 'Sessions',  render: renderSessions,  icon: 'layers' },
   '#keys':      { label: 'API Keys',  render: renderKeys,      icon: 'key-round' },
+  '#setup':     { label: 'Setup',     render: renderSetup,     icon: 'rocket' },
   '#billing':   { label: 'Billing',   render: renderBilling,   icon: 'credit-card' },
 };
 

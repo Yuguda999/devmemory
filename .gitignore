@@ -43,3 +43,7 @@ coverage.xml
 
 # ruff
 .ruff_cache/
+
+# DevMemory auto-generated context (do not commit)
+CLAUDE.md
+.augment/rules/devmemory.md
