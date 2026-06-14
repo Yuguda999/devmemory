@@ -3,6 +3,13 @@ import { icon, toast, spinner } from '../utils.js';
 
 // ── Tool definitions — icons served from /static/icons/ ──────────────────────
 
+function tomlSnippet(apiKey) {
+  return `[mcp_servers.devmemory]
+command = "devmemory"
+
+[mcp_servers.devmemory.env]
+DEVMEMORY_API_KEY = "${apiKey || 'dm_key_YOUR_KEY_HERE'}"`;
+}
 const TOOLS = [
   {
     slug: 'claude-code',
@@ -89,6 +96,20 @@ const TOOLS = [
       'Linux / macOS': '~/.config/kilo/kilo.jsonc',
       'Windows': '%USERPROFILE%\\.config\\kilo\\kilo.jsonc',
     },
+  },
+  {
+    slug: 'codex',
+    name: 'Codex CLI',
+    desc: "OpenAI's agentic coding CLI",
+    color: '#ffffff',
+    icon: '/static/icons/codex.svg',
+    iconBg: 'rgba(255,255,255,0.08)',
+    configFormat: 'toml',
+    configs: {
+      'Linux / macOS': '~/.codex/config.toml',
+      'Windows': '%USERPROFILE%\\.codex\\config.toml',
+    },
+    cli: 'codex mcp add devmemory --command devmemory --env DEVMEMORY_API_KEY={{API_KEY}}',
   },
   {
     slug: 'claude-desktop',
@@ -355,7 +376,9 @@ function showToolDetail(slug, apiKey) {
   if (!t) return;
 
   const detail = document.getElementById('tool-detail');
-  const snippet = mcpJsonSnippet(apiKey);
+  const isToml = t.configFormat === 'toml';
+  const snippet = isToml ? tomlSnippet(apiKey) : mcpJsonSnippet(apiKey);
+  const configLabel = isToml ? 'TOML Configuration (~/.codex/config.toml)' : 'JSON Configuration';
   const cliInstall = `devmemory install --tool ${t.slug} --api-key YOUR_KEY`;
 
   const configRows = Object.entries(t.configs).map(([os, path]) => `
@@ -403,7 +426,7 @@ function showToolDetail(slug, apiKey) {
       <div class="detail-method">
         <div class="detail-method-label">
           <span class="method-badge">Manual</span>
-          JSON Configuration
+          ${escHtml(configLabel)}
         </div>
         <div class="config-paths-list">${configRows}</div>
         <div class="step-code lg multi">
@@ -414,7 +437,14 @@ function showToolDetail(slug, apiKey) {
 
       ${t.hook ? `
       <div class="detail-note">
-        ${icon('info', 14)} The install command also adds a <strong>SessionStart hook</strong> that loads context automatically on every new Augment session.
+        <div class="detail-note-icon">${icon('info', 14)}</div>
+        <div class="detail-note-text">The install command also adds a <strong>SessionStart hook</strong> that injects your project context automatically on every new Augment session — no manual steps needed.</div>
+      </div>` : ''}
+
+      ${isToml ? `
+      <div class="detail-note">
+        <div class="detail-note-icon">${icon('info', 14)}</div>
+        <div class="detail-note-text">Codex uses <strong>TOML format</strong> instead of JSON. Add the block above to <code>~/.codex/config.toml</code>, or run <code>codex mcp add devmemory -- devmemory</code> and Codex will write the config for you.</div>
       </div>` : ''}
     </div>
   `;

@@ -834,12 +834,20 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; 
 .code-copy-btn.top-right { align-self: flex-start; flex-shrink: 0; }
 
 .detail-note {
-  display: flex; align-items: flex-start; gap: 8px;
+  display: flex; align-items: flex-start; gap: 10px;
   background: rgba(91,140,245,0.07); border: 1px solid rgba(91,140,245,0.18);
-  border-radius: 8px; padding: 11px 13px;
-  font-size: 12.5px; color: var(--text-secondary); line-height: 1.55;
+  border-radius: 8px; padding: 12px 14px;
+  font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;
 }
+.detail-note-icon { flex-shrink: 0; margin-top: 1px; color: rgba(91,140,245,0.8); }
+.detail-note-text { flex: 1; min-width: 0; }
 .detail-note strong { color: var(--text-primary); }
+.detail-note code {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  background: rgba(255,255,255,0.08); color: var(--text-primary);
+  padding: 1px 5px; border-radius: 4px;
+  white-space: nowrap;
+}
 
 /* ── Auto-Sync Flow ────────────────────────────────────── */
 .sync-flow {
