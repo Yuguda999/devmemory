@@ -55,10 +55,29 @@ from devmemory.tools.resume import generate_resume_prompt as _build_resume_promp
 mcp = FastMCP(
     name="devmemory",
     instructions=(
-        "DevMemory is a persistent memory layer for AI coding tools. "
-        "Use save_context to record goals, decisions, code snippets, errors, and next steps. "
-        "Use get_context or generate_resume_prompt to restore context when resuming work. "
-        "Authenticate via the api_key argument or the DEVMEMORY_API_KEY environment variable."
+        "DevMemory is the user's persistent memory layer. It ensures their work context "
+        "survives across AI tool switches (e.g. Claude → Cursor → Windsurf) and credit resets. "
+        "Without saved context, the user loses everything when they switch tools. "
+        "\n\n"
+        "## CRITICAL: You MUST call save_context proactively. Do NOT wait to be asked.\n"
+        "\n"
+        "### When to call save_context:\n"
+        "- SESSION START: Immediately call save_context with block_type='goal' describing what the user wants to accomplish.\n"
+        "- AFTER EVERY FILE EDIT or code change: save block_type='code' with a summary of what was changed and why.\n"
+        "- AFTER EVERY KEY DECISION: save block_type='decision' when an architectural, design, or implementation choice is made.\n"
+        "- ON EVERY ERROR: save block_type='error' with the error message and what fix was attempted.\n"
+        "- BEFORE ENDING: save block_type='next_step' with exactly what needs to be done next.\n"
+        "- AT ANY NATURAL PAUSE: save block_type='note' with any context that would help someone picking this up fresh.\n"
+        "\n"
+        "### When to call get_context or generate_resume_prompt:\n"
+        "- At the start of a session to restore prior work (check for existing context before starting).\n"
+        "- When the user says 'continue', 'resume', 'pick up where we left off', or similar.\n"
+        "\n"
+        "### Authentication:\n"
+        "Use the api_key argument or the DEVMEMORY_API_KEY environment variable.\n"
+        "\n"
+        "Saving context is not optional — it is core to why DevMemory exists. "
+        "A session with no saved blocks is a session the user cannot recover from."
     ),
 )
 
