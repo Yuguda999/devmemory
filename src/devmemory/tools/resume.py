@@ -36,6 +36,7 @@ _SECTIONS: list[_Section] = [
     _Section("code",      "💻 Code Context",  "Relevant code snippets and implementation details:"),
     _Section("error",     "🐛 Known Errors",  "Errors encountered (may still be open):"),
     _Section("next_step", "👣 Next Steps",    "What to work on next, in order:"),
+    _Section("task",      "✅ Tasks",         "Task checklist:"),
     _Section("note",      "📝 Notes",         "Additional context and notes:"),
 ]
 
@@ -91,15 +92,15 @@ def generate_resume_prompt(
     """
     preamble = _PREAMBLES.get(target_tool.lower(), _PREAMBLES["generic"])
 
-    grouped: dict[str, list[str]] = {}
-    unknown: list[str] = []
+    grouped: dict[str, list["ContextBlock"]] = {}
+    unknown: list["ContextBlock"] = []
 
     for block in blocks:
         bt = (block.block_type or "").lower()
         if bt in _SECTION_ORDER:
-            grouped.setdefault(bt, []).append(block.content)
+            grouped.setdefault(bt, []).append(block)
         else:
-            unknown.append(block.content)
+            unknown.append(block)
 
     lines: list[str] = [
         preamble,
@@ -123,17 +124,26 @@ def generate_resume_prompt(
             continue
         lines.append(f"### {section.heading}")
         lines.append(section.intro)
-        for item in items:
-            # Indent multi-line content for readability
-            indented = "\n".join(f"  {l}" for l in item.splitlines())
-            lines.append(f"- {indented.lstrip()}")
+        for block in items:
+            content = block.content
+            if section.block_type == "task":
+                status = block.extra_metadata.get("status", "pending")
+                marker = "[ ]"
+                if status == "in_progress": marker = "[/]"
+                elif status == "done": marker = "[x]"
+                elif status == "skipped": marker = "[-]"
+                indented = "\n".join(f"  {l}" for l in content.splitlines())
+                lines.append(f"- {marker} {indented.lstrip()}")
+            else:
+                indented = "\n".join(f"  {l}" for l in content.splitlines())
+                lines.append(f"- {indented.lstrip()}")
         lines.append("")
 
     # Append any unrecognised block types at the end
     if unknown:
         lines.append("### Additional Context")
-        for item in unknown:
-            lines.append(f"- {item}")
+        for block in unknown:
+            lines.append(f"- {block.content}")
         lines.append("")
 
     if not grouped and not unknown:
