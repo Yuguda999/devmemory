@@ -315,6 +315,7 @@ class TestContextBlockModel:
         expected = {
             "goal", "decision", "code", "file_ref", "error",
             "insight", "next_step", "dependency", "blocker",
+            "task", "note",
         }
         actual = {bt.value for bt in BlockType}
         assert actual == expected
@@ -365,7 +366,7 @@ class TestModelEnums:
         ]
 
     async def test_block_type_values(self):
-        assert len(BlockType) == 9
+        assert len(BlockType) == 11
 
 
 class TestTableRegistry:
