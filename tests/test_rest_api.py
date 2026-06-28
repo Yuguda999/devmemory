@@ -300,3 +300,52 @@ class TestBillingRoutes:
         data = response.json()
         assert data["tier"] == "team"
         assert data["limits"]["max_projects"] is None
+
+
+# ── /connections ─────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class _Conn:
+    client: str = "cursor"
+    client_version: str | None = None
+    last_seen_at: datetime = field(default_factory=_now)
+    created_at: datetime = field(default_factory=_now)
+
+
+class TestConnectionRoutes:
+    def test_list_connections_derives_status(self, client):
+        from datetime import timedelta
+
+        now = _now()
+        conns = [
+            _Conn(client="cursor", last_seen_at=now),                       # connected
+            _Conn(client="claude-code", last_seen_at=now - timedelta(minutes=30)),  # idle
+            _Conn(client="windsurf", last_seen_at=now - timedelta(hours=5)),        # offline
+        ]
+
+        with patch(
+            "devmemory.api.connection_routes.list_tool_connections",
+            AsyncMock(return_value=conns),
+        ):
+            response = client.get("/connections")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 3
+        by_client = {c["client"]: c["status"] for c in data["connections"]}
+        assert by_client == {
+            "cursor": "connected",
+            "claude-code": "idle",
+            "windsurf": "offline",
+        }
+
+    def test_list_connections_empty(self, client):
+        with patch(
+            "devmemory.api.connection_routes.list_tool_connections",
+            AsyncMock(return_value=[]),
+        ):
+            response = client.get("/connections")
+
+        assert response.status_code == 200
+        assert response.json() == {"connections": [], "count": 0}

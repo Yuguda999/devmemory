@@ -1,5 +1,50 @@
 import { api, state } from '../api.js';
-import { fmtDate, statusBadge, tierBadge, progressBar, spinner, emptyState, icon } from '../utils.js';
+import { fmtDate, fmtDateTime, statusBadge, tierBadge, progressBar, spinner, emptyState, icon } from '../utils.js';
+
+/* Friendly labels + status colors for connected AI tools. */
+const TOOL_LABELS = {
+  'claude-code': 'Claude Code',
+  'claude-desktop': 'Claude Desktop',
+  'cursor': 'Cursor',
+  'windsurf': 'Windsurf',
+  'augment': 'Augment Code',
+  'antigravity': 'Antigravity',
+  'cline': 'Cline',
+  'kilo': 'Kilo Code',
+  'unknown': 'Unknown tool',
+};
+const CONN_COLORS = { connected: 'var(--green)', idle: 'var(--accent)', offline: 'var(--text-muted)' };
+
+function connectionsCard(connections) {
+  const list = connections?.connections || [];
+  const rows = list.map(c => {
+    const color = CONN_COLORS[c.status] || 'var(--text-muted)';
+    const label = TOOL_LABELS[c.client] || c.client;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:9px;height:9px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color}"></span>
+          <span style="font-weight:500">${label}</span>
+          ${c.client_version ? `<span style="color:var(--text-muted);font-size:11px">v${c.client_version}</span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="text-transform:capitalize;font-size:12px;color:${color}">${c.status}</span>
+          <span style="color:var(--text-muted);font-size:11px" title="${fmtDateTime(c.last_seen_at)}">${fmtDate(c.last_seen_at)}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card" style="margin-top:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span class="nav-icon">${icon('plug', 16)}</span>
+        <div class="section-title" style="margin:0">Connected Tools</div>
+      </div>
+      ${list.length
+        ? rows
+        : emptyState('plug', 'No tools connected yet', 'Run <code>devmemory install --tool &lt;name&gt;</code>, then use the tool to see it here.')}
+    </div>`;
+}
 
 export async function renderDashboard(container) {
   container.innerHTML = `
@@ -15,10 +60,11 @@ export async function renderDashboard(container) {
   const body = document.getElementById('dash-body');
 
   try {
-    const [billing, projects, sessions] = await Promise.all([
+    const [billing, projects, sessions, connections] = await Promise.all([
       api.get('/billing/status').catch(() => null),
       api.get('/projects'),
       api.get('/sessions?limit=5'),
+      api.get('/connections').catch(() => null),
     ]);
 
     const user = state.user;
@@ -95,6 +141,9 @@ export async function renderDashboard(container) {
           ` : emptyState('layers', 'No sessions yet', 'Sessions are created automatically by the MCP tools.')}
         </div>
       </div>
+
+      <!-- Connected Tools -->
+      ${connectionsCard(connections)}
 
       <!-- Projects preview -->
       <div style="margin-top:16px">

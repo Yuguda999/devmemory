@@ -18,10 +18,15 @@ from __future__ import annotations
 import os
 
 from devmemory.db.engine import get_db_session
-from devmemory.db.repository import get_api_key_by_hash, touch_api_key
+from devmemory.db.repository import (
+    get_api_key_by_hash,
+    record_tool_connection,
+    touch_api_key,
+)
 
 
 _ENV_VAR = "DEVMEMORY_API_KEY"
+_CLIENT_ENV_VAR = "DEVMEMORY_CLIENT"
 
 
 async def resolve_mcp_api_key(api_key_arg: str | None = None) -> str:
@@ -53,7 +58,19 @@ async def resolve_mcp_api_key(api_key_arg: str | None = None) -> str:
                 "Generate a key at /auth/api-keys or check your DEVMEMORY_API_KEY."
             )
         await touch_api_key(db, api_key.id)
-        return str(api_key.user_id)
+        user_id = str(api_key.user_id)
+
+        # Heartbeat: record which tool is talking to us so the dashboard can
+        # show live connection status. The tool slug is injected as
+        # DEVMEMORY_CLIENT by ``devmemory install``; absent that we fall back
+        # to "unknown". Never let tracking failures break a tool call.
+        client = os.environ.get(_CLIENT_ENV_VAR, "").strip() or "unknown"
+        try:
+            await record_tool_connection(db, user_id=user_id, client=client)
+        except Exception:  # pragma: no cover - tracking is best-effort
+            pass
+
+        return user_id
 
 
 def _pick_key(api_key_arg: str | None) -> str:

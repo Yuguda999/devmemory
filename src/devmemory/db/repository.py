@@ -16,6 +16,7 @@ from devmemory.models import (
     Session,
     Subscription,
     SubscriptionTier,
+    ToolConnection,
     User,
 )
 
@@ -547,3 +548,61 @@ async def update_context_block_status(
 
     await session.flush()
     return block
+
+
+# ── Tool Connection Operations ─────────────────────────────────
+
+async def record_tool_connection(
+    session: AsyncSession,
+    user_id: str,
+    client: str,
+    client_version: str | None = None,
+) -> ToolConnection:
+    """Upsert a heartbeat for an AI tool connected via MCP.
+
+    Creates the ``(user_id, client)`` row on first contact, otherwise refreshes
+    ``last_seen_at`` (and ``client_version`` when supplied). Called on every
+    authenticated MCP tool call so the dashboard can show live connection status.
+
+    Returns:
+        The created or updated ToolConnection.
+    """
+    client = (client or "unknown").lower().strip() or "unknown"
+    now = datetime.now(timezone.utc)
+
+    result = await session.execute(
+        select(ToolConnection).where(
+            ToolConnection.user_id == user_id,
+            ToolConnection.client == client,
+        )
+    )
+    conn = result.scalar_one_or_none()
+
+    if conn is None:
+        conn = ToolConnection(
+            user_id=user_id,
+            client=client,
+            client_version=client_version,
+            last_seen_at=now,
+        )
+        session.add(conn)
+    else:
+        conn.last_seen_at = now
+        if client_version:
+            conn.client_version = client_version
+
+    await session.flush()
+    return conn
+
+
+async def list_tool_connections(
+    session: AsyncSession,
+    user_id: str,
+) -> list[ToolConnection]:
+    """Return all tool connections for a user, most-recently-seen first."""
+    result = await session.execute(
+        select(ToolConnection)
+        .where(ToolConnection.user_id == user_id)
+        .order_by(ToolConnection.last_seen_at.desc())
+    )
+    return list(result.scalars().all())

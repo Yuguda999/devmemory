@@ -142,8 +142,15 @@ ALL_TOOL_SLUGS = list(TOOLS.keys())
 # ── MCP Entry Builder ─────────────────────────────────────────────────────────
 
 
-def _build_mcp_entry(api_key: str, host: str | None = None) -> dict:
-    """Build the standard devmemory MCP server entry."""
+def _build_mcp_entry(api_key: str, client: str | None = None, host: str | None = None) -> dict:
+    """Build the standard devmemory MCP server entry.
+
+    Args:
+        api_key: The DevMemory API key to embed.
+        client:  Tool slug recorded as ``DEVMEMORY_CLIENT`` so the MCP heartbeat
+                 can attribute connections to the right tool in the dashboard.
+        host:    Optional REST host override.
+    """
     # Always prefer the absolute path to the installed binary. AI tools launch
     # the MCP server with their own PATH (not the user's interactive shell PATH),
     # so a bare "devmemory" only resolves when it happens to be on that PATH —
@@ -152,6 +159,8 @@ def _build_mcp_entry(api_key: str, host: str | None = None) -> dict:
     command = shutil.which("devmemory") or "devmemory"
 
     env: dict[str, str] = {"DEVMEMORY_API_KEY": api_key}
+    if client:
+        env["DEVMEMORY_CLIENT"] = client
     if host:
         env["DEVMEMORY_HOST"] = host
 
@@ -577,7 +586,7 @@ def install_tool(
         return False, f"Unknown tool '{tool_slug}'. Supported: {valid}"
 
     config_path = _resolve_config_path(tool)
-    mcp_entry = _build_mcp_entry(api_key, host=host)
+    mcp_entry = _build_mcp_entry(api_key, client=tool.slug, host=host)
 
     if dry_run:
         snippet = json.dumps({"mcpServers": {"devmemory": mcp_entry}}, indent=2)

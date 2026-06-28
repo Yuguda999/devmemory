@@ -483,3 +483,50 @@ class TestCascadeDeletes:
             select(Session).where(Session.project_id == project_a.id)
         )
         assert list(sessions.scalars().all()) == []
+
+
+# ── Tool Connections ───────────────────────────────────────────
+
+
+class TestToolConnections:
+    async def test_record_creates_then_updates(self, db_session: AsyncSession, user_a):
+        from devmemory.db.repository import (
+            list_tool_connections,
+            record_tool_connection,
+        )
+
+        c1 = await record_tool_connection(db_session, user_a.id, "cursor")
+        first_seen = c1.last_seen_at
+
+        # Same (user, client) upserts — no duplicate row, last_seen advances.
+        c2 = await record_tool_connection(db_session, user_a.id, "cursor", client_version="1.2")
+        assert c1.id == c2.id
+        assert c2.client_version == "1.2"
+        assert c2.last_seen_at >= first_seen
+
+        conns = await list_tool_connections(db_session, user_a.id)
+        assert len(conns) == 1
+        assert conns[0].client == "cursor"
+
+    async def test_client_is_normalized(self, db_session: AsyncSession, user_a):
+        from devmemory.db.repository import record_tool_connection
+
+        c = await record_tool_connection(db_session, user_a.id, "  Claude-Code  ")
+        assert c.client == "claude-code"
+
+    async def test_blank_client_falls_back_to_unknown(self, db_session: AsyncSession, user_a):
+        from devmemory.db.repository import record_tool_connection
+
+        c = await record_tool_connection(db_session, user_a.id, "")
+        assert c.client == "unknown"
+
+    async def test_distinct_clients_create_distinct_rows(self, db_session: AsyncSession, user_a):
+        from devmemory.db.repository import (
+            list_tool_connections,
+            record_tool_connection,
+        )
+
+        await record_tool_connection(db_session, user_a.id, "cursor")
+        await record_tool_connection(db_session, user_a.id, "windsurf")
+        conns = await list_tool_connections(db_session, user_a.id)
+        assert {c.client for c in conns} == {"cursor", "windsurf"}

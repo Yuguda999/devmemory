@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
     # ── Routes ─────────────────────────────────────────────────
     from devmemory.api.auth_routes import router as auth_router
     from devmemory.api.billing_routes import router as billing_router
+    from devmemory.api.connection_routes import router as connection_router
     from devmemory.api.context_routes import router as context_router
     from devmemory.api.project_routes import router as project_router
     from devmemory.api.session_routes import router as session_router
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(session_router)
     app.include_router(billing_router)
     app.include_router(context_router)
+    app.include_router(connection_router)
 
     # ── Health Check ───────────────────────────────────────────
     @app.get("/health", tags=["system"], summary="Health check")

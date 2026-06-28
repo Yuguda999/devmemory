@@ -168,6 +168,25 @@ class ContextBlockListResponse(BaseModel):
     count: int
 
 
+# ── Tool Connections ───────────────────────────────────────────
+
+class ToolConnectionResponse(BaseModel):
+    """A connected AI tool and its derived live status."""
+
+    client: str
+    client_version: str | None
+    status: str = Field(description="One of: connected, idle, offline")
+    last_seen_at: datetime
+    first_seen_at: datetime
+
+
+class ToolConnectionListResponse(BaseModel):
+    """List of tool connections for the authenticated user."""
+
+    connections: list[ToolConnectionResponse]
+    count: int
+
+
 # ── Billing ────────────────────────────────────────────────────
 
 class BillingLimits(BaseModel):

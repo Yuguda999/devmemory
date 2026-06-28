@@ -376,6 +376,7 @@ class TestTableRegistry:
         expected_tables = {
             "users", "api_keys", "subscriptions",
             "projects", "sessions", "context_blocks",
+            "tool_connections",
         }
         actual_tables = set(Base.metadata.tables.keys())
         assert expected_tables == actual_tables

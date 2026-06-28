@@ -7,6 +7,7 @@ from devmemory.models.subscription import Subscription, SubscriptionTier, Subscr
 from devmemory.models.project import Project
 from devmemory.models.session import Session, SessionStatus
 from devmemory.models.context import ContextBlock, BlockType
+from devmemory.models.connection import ToolConnection
 
 __all__ = [
     "Base",
@@ -22,4 +23,5 @@ __all__ = [
     "SessionStatus",
     "ContextBlock",
     "BlockType",
+    "ToolConnection",
 ]
