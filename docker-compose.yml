@@ -1,0 +1,18 @@
+services:
+  devmemory:
+    build: .
+    image: devmemory:local
+    ports:
+      - "8765:8765"
+    environment:
+      DEVMEMORY_DEPLOYMENT_MODE: self-hosted
+      DEVMEMORY_DATABASE_URL: sqlite+aiosqlite:////data/devmemory.db
+      DEVMEMORY_LOG_LEVEL: INFO
+      # Generate one: python -c "import secrets; print(secrets.token_hex(32))"
+      DEVMEMORY_SECRET_KEY: ${DEVMEMORY_SECRET_KEY:-change-me-to-a-random-secret-key}
+    volumes:
+      - devmemory-data:/data
+    restart: unless-stopped
+
+volumes:
+  devmemory-data:
