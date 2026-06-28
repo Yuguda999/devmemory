@@ -45,6 +45,7 @@ from devmemory.db.repository import (
     list_projects,
     list_sessions,
     update_session,
+    update_context_block_status,
 )
 from devmemory.models.context import BlockType
 from devmemory.resolver.git_resolver import resolve_project_slug
@@ -55,10 +56,34 @@ from devmemory.tools.resume import generate_resume_prompt as _build_resume_promp
 mcp = FastMCP(
     name="devmemory",
     instructions=(
-        "DevMemory is a persistent memory layer for AI coding tools. "
-        "Use save_context to record goals, decisions, code snippets, errors, and next steps. "
-        "Use get_context or generate_resume_prompt to restore context when resuming work. "
-        "Authenticate via the api_key argument or the DEVMEMORY_API_KEY environment variable."
+        "DevMemory is the user's persistent memory layer. It ensures their work context "
+        "survives across AI tool switches (e.g. Claude → Cursor → Windsurf) and credit resets. "
+        "Without saved context, the user loses everything when they switch tools. "
+        "\n\n"
+        "## CRITICAL: You MUST call save_context proactively. Do NOT wait to be asked.\n"
+        "\n"
+        "### When to call save_context:\n"
+        "- SESSION START: Immediately call save_context with block_type='goal' describing what the user wants to accomplish.\n"
+        "- AFTER EVERY FILE EDIT or code change: save block_type='code' with a summary of what was changed and why.\n"
+        "- AFTER EVERY KEY DECISION: save block_type='decision' when an architectural, design, or implementation choice is made.\n"
+        "- ON EVERY ERROR: save block_type='error' with the error message and what fix was attempted.\n"
+        "- BEFORE ENDING: save block_type='next_step' with exactly what needs to be done next.\n"
+        "- AT ANY NATURAL PAUSE: save block_type='note' with any context that would help someone picking this up fresh.\n"
+        "\n"
+        "### Task Tracking:\n"
+        "- WHEN CREATING A TASK LIST: call save_tasks with all tasks at once. Store returned task_ids.\n"
+        "- BEFORE STARTING each task: call update_task(block_id, \"in_progress\").\n"
+        "- AFTER COMPLETING each task: call update_task(block_id, \"done\").\n"
+        "\n"
+        "### When to call get_context or generate_resume_prompt:\n"
+        "- At the start of a session to restore prior work (check for existing context before starting).\n"
+        "- When the user says 'continue', 'resume', 'pick up where we left off', or similar.\n"
+        "\n"
+        "### Authentication:\n"
+        "Use the api_key argument or the DEVMEMORY_API_KEY environment variable.\n"
+        "\n"
+        "Saving context is not optional — it is core to why DevMemory exists. "
+        "A session with no saved blocks is a session the user cannot recover from."
     ),
 )
 
@@ -198,6 +223,155 @@ async def save_context(
         project_slug=proj_info.slug,
         block_type=bt,
     )
+
+
+# ── Tool: save_tasks ───────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def save_tasks(
+    tasks: list[dict],
+    cwd: str,
+    session_id: str | None = None,
+    project: str | None = None,
+    api_key: str | None = None,
+) -> dict:
+    """Save a list of tasks as individual 'task' context blocks.
+
+    Each task dict can contain:
+      - title (str): Short name of the task
+      - description (str, optional): Additional details
+      - priority (int, optional): 1-10 priority weight
+
+    Args:
+        tasks:      List of task dictionaries.
+        cwd:        Working directory — used for automatic project detection.
+        session_id: Optional existing session ID to append to.
+        project:    Optional explicit project name.
+        api_key:    DevMemory API key.
+    """
+    try:
+        user_id = await resolve_mcp_api_key(api_key)
+    except ValueError as exc:
+        return _err(str(exc))
+
+    if not tasks:
+        return _err("tasks list must not be empty")
+
+    async with get_db_session() as db:
+        # ── Resolve / create project ──────────────────────────────────────────
+        proj_info = await resolve_project_slug(cwd, explicit_project=project)
+        proj, proj_is_new = await get_or_create_project(
+            db, user_id, proj_info.slug, name=proj_info.name, remote_url=proj_info.remote_url
+        )
+
+        if proj_is_new:
+            try:
+                await check_project_quota(db, user_id)
+            except QuotaExceededError as exc:
+                return _err(str(exc))
+
+        # ── Resolve session ───────────────────────────────────────────────────
+        if session_id:
+            dev_session = await get_session(db, session_id, user_id)
+            if dev_session is None:
+                return _err(f"Session '{session_id}' not found or not accessible")
+        else:
+            active = await list_sessions(
+                db, user_id, project_id=str(proj.id), status="active", limit=1,
+            )
+            if active:
+                dev_session = active[0]
+            else:
+                try:
+                    await check_session_quota(db, user_id, str(proj.id))
+                except QuotaExceededError as exc:
+                    return _err(str(exc))
+                dev_session = await create_session(
+                    db,
+                    user_id=user_id,
+                    project_id=str(proj.id),
+                    title=f"Auto-session ({proj_info.name})",
+                    tool_source="devmemory-mcp",
+                )
+
+        if dev_session is None:
+            return _err("Could not resolve or create a session")
+
+        # ── Quota: new blocks ─────────────────────────────────────────────────
+        try:
+            # We check if there's quota for at least one block, though bulk might exceed it.
+            await check_block_quota(db, user_id, str(dev_session.id))
+        except QuotaExceededError as exc:
+            return _err(str(exc))
+
+        # ── Save blocks ───────────────────────────────────────────────────────
+        blocks_data = []
+        for i, t in enumerate(tasks):
+            content = t.get("title", f"Task {i+1}")
+            desc = t.get("description")
+            if desc:
+                content += f"\n\n{desc}"
+            
+            blocks_data.append({
+                "block_type": "task",
+                "content": content.strip(),
+                "priority": t.get("priority", 5),
+                "meta_json": json.dumps({"status": "pending", "index": i}),
+            })
+            
+        blocks = await create_bulk_context_blocks(
+            db,
+            session_id=str(dev_session.id),
+            user_id=user_id,
+            blocks=blocks_data,
+        )
+        if blocks is None:
+            return _err("Failed to save task blocks")
+
+    return _ok(
+        session_id=str(dev_session.id),
+        project_slug=proj_info.slug,
+        task_ids=[str(b.id) for b in blocks],
+    )
+
+
+# ── Tool: update_task ──────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def update_task(
+    block_id: str,
+    status: str,
+    cwd: str,
+    session_id: str | None = None,
+    api_key: str | None = None,
+) -> dict:
+    """Update a task's status (pending, in_progress, done, skipped).
+
+    Args:
+        block_id:   The task block ID returned from save_tasks.
+        status:     The new status.
+        cwd:        Working directory.
+        session_id: Optional session ID.
+        api_key:    DevMemory API key.
+    """
+    try:
+        user_id = await resolve_mcp_api_key(api_key)
+    except ValueError as exc:
+        return _err(str(exc))
+
+    valid_statuses = {"pending", "in_progress", "done", "skipped"}
+    if status not in valid_statuses:
+        return _err(f"status must be one of: {', '.join(sorted(valid_statuses))}")
+
+    async with get_db_session() as db:
+        block = await update_context_block_status(db, block_id, user_id, status)
+
+    if block is None:
+        return _err(f"Task block '{block_id}' not found or not accessible")
+
+    return _ok(block_id=block_id, status=status)
 
 
 # ── Tool: get_context ──────────────────────────────────────────────────────────

@@ -505,3 +505,45 @@ async def delete_context_block(
     await session.delete(block)
     await session.flush()
     return True
+
+
+async def get_context_block_by_id(
+    session: AsyncSession, block_id: str, user_id: str,
+) -> ContextBlock | None:
+    """Get a context block by ID.
+
+    Enforces user ownership by joining through session → project → user.
+    """
+    result = await session.execute(
+        select(ContextBlock)
+        .join(Session, ContextBlock.session_id == Session.id)
+        .join(Project, Session.project_id == Project.id)
+        .where(ContextBlock.id == block_id, Project.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_context_block_status(
+    session: AsyncSession,
+    block_id: str,
+    user_id: str,
+    status: str,
+) -> ContextBlock | None:
+    """Update only the status field in a task block's meta_json.
+
+    Enforces user ownership by joining through session → project → user.
+
+    Returns:
+        The updated ContextBlock, or None if not found or not owned by user.
+    """
+    block = await get_context_block_by_id(session, block_id, user_id)
+    if block is None:
+        return None
+
+    # Load existing metadata or create new
+    meta = block.extra_metadata
+    meta["status"] = status
+    block.extra_metadata = meta
+
+    await session.flush()
+    return block

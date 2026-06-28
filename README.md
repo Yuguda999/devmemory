@@ -18,42 +18,26 @@ Every time you switch AI coding tools — Cursor → Claude → Windsurf — you
 DevMemory is an MCP server that acts as **persistent memory across coding tools**:
 
 ```
-Cursor writes context → DevMemory → Claude reads context
-Claude makes decisions → DevMemory → Windsurf continues
+Cursor saves context  → DevMemory DB → Claude auto-loads context
+Claude makes decisions → DevMemory DB → Windsurf continues
+Augment credits run low → DevMemory DB → Switch to Antigravity instantly
 ```
 
-Same project, same memory, zero setup per tool.
+Same project, same memory, zero friction.
 
 ---
 
-## Features
-
-- 🧩 **Structured Context** — Save typed blocks: goals, decisions, code, errors, next steps, notes
-- 🔄 **Resume Prompts** — Generate an optimised "continue here" prompt tuned for each tool
-- 🔍 **Auto Project Detection** — Resolves projects from git remote URLs (zero config)
-- 🔐 **Multi-user Auth** — JWT + API keys, tiered subscriptions (Free / Pro / Team)
-- 📊 **Quota Enforcement** — Tier limits enforced at write time; usage visible via REST API
-- 🏠 **Self-Hostable** — Run locally with SQLite; switch to PostgreSQL for production
-- ☁️ **SaaS Option** — Hosted version at devmemory.io (coming soon)
-
----
-
-## Quick Start
-
-### Install via PyPI (MCP server)
+## 30-Second Quick Start
 
 ```bash
-# Run directly — no install needed (downloads latest PyPI release each time)
+# Run directly — no install needed
 uvx devmemory
 
-# Or install a persistent command
+# Or install globally
 pip install devmemory
 devmemory          # starts MCP server (stdio, for AI tools)
 devmemory --rest   # starts REST API (HTTP, for dashboards)
 ```
-
-> Working from a clone of this repo? `uvx` / `pip install devmemory` pull the
-> **published** version, not your local code. See [Development](#development) to run your checkout.
 
 ### Connect from Claude Desktop
 
@@ -81,33 +65,36 @@ Add to `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "devmemory": {
-      "command": "uvx",
-      "args": ["devmemory"],
+      "command": "devmemory",
       "env": {
-        "DEVMEMORY_API_KEY": "dm_key_your_key_here"
+        "DEVMEMORY_API_KEY": "dm_key_YOUR_KEY_HERE"
       }
     }
   }
 }
 ```
 
-### Connect from Windsurf
-
-Add to `~/.codeium/windsurf/mcp_config.json`:
-
+**Windows users**: If `devmemory` isn't on your PATH, use the full path or wrap with cmd:
 ```json
 {
-  "mcpServers": {
-    "devmemory": {
-      "command": "uvx",
-      "args": ["devmemory"],
-      "env": {
-        "DEVMEMORY_API_KEY": "dm_key_your_key_here"
-      }
-    }
-  }
+  "command": "cmd",
+  "args": ["/c", "devmemory"]
 }
 ```
+
+---
+
+## Features
+
+- 🧩 **Structured Context** — Save typed blocks: goals, decisions, code, errors, next steps, insights, dependencies, blockers
+- 🔄 **Resume Prompts** — Generate an optimised "continue here" prompt tuned for each tool
+- 🔍 **Auto Project Detection** — Resolves projects from git remote URLs (zero config)
+- 🔐 **Multi-user Auth** — JWT + API keys, tiered subscriptions (Free / Pro / Team)
+- 📊 **Quota Enforcement** — Tier limits enforced at write time; usage visible via REST API
+- 🏠 **Self-Hostable** — Run locally with SQLite; switch to PostgreSQL for production
+- 🌐 **Cross-Platform** — Works on Windows, macOS, and Linux
+- 📊 **Web Dashboard** — Monitor sessions, projects, and context at `http://localhost:8765`
+- ⚡ **Auto-Sync** — SessionStart hooks and inject commands for zero-friction tool switching
 
 ---
 
@@ -117,7 +104,7 @@ Once connected, your AI tool will have access to these seven tools:
 
 | Tool | What it does |
 |---|---|
-| `save_context` | Save a typed context block (goal, decision, code, error, next_step, note) |
+| `save_context` | Save a typed context block (goal, decision, code, error, next_step, insight, dependency, blocker) |
 | `get_context` | Retrieve context blocks for the current session/project |
 | `start_session` | Begin a new dev session (auto-detects project from git) |
 | `end_session` | Mark a session completed, paused, or archived |
@@ -125,16 +112,31 @@ Once connected, your AI tool will have access to these seven tools:
 | `generate_resume_prompt` | Build an optimised "continue here" prompt for switching tools |
 | `list_projects` | List all known projects for this account |
 
-### Example usage (Claude asking DevMemory to save context)
+### Example: Switching from Cursor to Claude
 
 ```
-save_context(
-  block_type="goal",
-  content="Implement MCP billing quota enforcement for free/pro/team tiers",
-  cwd="/home/user/devmemory",
-  priority=8
-)
+# In Cursor — save your work
+save_context(block_type="goal", content="Implement OAuth2 login flow", cwd="/my/project")
+save_context(block_type="decision", content="Using PKCE flow with refresh tokens", cwd="/my/project")
+save_context(block_type="next_step", content="Add /auth/callback endpoint", cwd="/my/project")
+
+# Switch to Claude Code — generate a resume prompt
+generate_resume_prompt(session_id="...", target_tool="claude")
+# → Structured prompt with goals, decisions, and next steps
+# → Claude picks up exactly where Cursor left off
 ```
+
+---
+
+## CLI Commands
+
+| Command | Description |
+|---|---|
+| `devmemory` | Start MCP server (stdio, for AI tools) |
+| `devmemory --rest` | Start REST API + Web Dashboard |
+| `devmemory install --tool <name> --api-key <key>` | One-time setup for an AI tool |
+| `devmemory install --all --api-key <key>` | Setup for all detected tools |
+| `devmemory inject [--cwd PATH]` | Auto-load context into CLAUDE.md, .augment/rules/ |
 
 ---
 
@@ -162,6 +164,12 @@ When running with `devmemory --rest`, a full REST API is available:
 | `PATCH` | `/sessions/{id}` | Update title or status |
 | `GET` | `/sessions/{id}/blocks` | List context blocks |
 | `DELETE` | `/context-blocks/{id}` | Delete a context block |
+
+### Context
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/context/resume` | Get resume prompt for a project (API key auth) |
 
 ### Billing
 
@@ -191,7 +199,7 @@ git clone https://github.com/Yuguda999/devmemory.git
 cd devmemory
 uv sync --extra dev
 
-# Run the test suite (208 tests, ~30s)
+# Run the test suite
 uv run pytest tests/ -v
 
 # Run the REST server locally
@@ -245,7 +253,7 @@ DEVMEMORY_SELF_HOSTED=true   # disables tier limits
 ## Architecture
 
 ```
-AI Tool (Cursor / Claude / Windsurf)
+AI Tool (Cursor / Claude / Windsurf / Augment / Antigravity / Cline / Kilo)
         │  MCP stdio (JSON-RPC)
         ▼
 ┌────────────────────────┐
@@ -263,8 +271,13 @@ AI Tool (Cursor / Claude / Windsurf)
 │   Alembic migrations   │
 └────────────────────────┘
 
-Optional: REST API (FastAPI)
-        ← /auth, /projects, /sessions, /billing
+Optional: REST API (FastAPI) + Web Dashboard
+        ← /auth, /projects, /sessions, /billing, /context/resume
+        ← http://localhost:8765 for dashboard
+
+CLI: devmemory install / inject
+        ← One-command tool setup
+        ← Auto-sync context to CLAUDE.md, .augment/rules/
 ```
 
 ---

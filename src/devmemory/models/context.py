@@ -24,6 +24,8 @@ class BlockType(str, Enum):
     NEXT_STEP = "next_step"
     DEPENDENCY = "dependency"
     BLOCKER = "blocker"
+    TASK = "task"
+    NOTE = "note"
 
 
 class ContextBlock(UUIDPrimaryKeyMixin, Base):
@@ -41,7 +43,7 @@ class ContextBlock(UUIDPrimaryKeyMixin, Base):
     )
     block_type: Mapped[str] = mapped_column(
         String(30), nullable=False, index=True,
-        comment="One of: goal, decision, code, file_ref, error, insight, next_step, dependency, blocker",
+        comment="One of: goal, decision, code, file_ref, error, insight, next_step, dependency, blocker, task, note",
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     meta_json: Mapped[str | None] = mapped_column(
@@ -54,6 +56,9 @@ class ContextBlock(UUIDPrimaryKeyMixin, Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False,
     )
 
     # ── Relationships ───────────────────────────────────────────
