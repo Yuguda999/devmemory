@@ -30,13 +30,31 @@ Same project, same memory, zero friction.
 ## 30-Second Quick Start
 
 ```bash
-# Run directly — no install needed
-uvx devmemory
+# Install globally so the `devmemory` command is on your PATH
+pip install devmemory          # or: uv tool install devmemory  /  pipx install devmemory
 
-# Or install globally
-pip install devmemory
 devmemory          # starts MCP server (stdio, for AI tools)
 devmemory --rest   # starts REST API (HTTP, for dashboards)
+```
+
+> **Install it for real — don't rely on `uvx devmemory` in MCP configs.** AI tools
+> launch the MCP server with their own environment, not your shell's PATH. A bare
+> `devmemory` (or `uvx`) only resolves if it happens to be on that PATH, which
+> causes intermittent "failed to connect" errors. The `devmemory install` command
+> below avoids this by writing the **absolute path** to the binary into the config.
+
+### Connect from Claude Code (recommended)
+
+Let DevMemory write the config for you — this resolves the absolute path automatically:
+
+```bash
+devmemory install --tool claude-code --api-key dm_key_YOUR_KEY
+```
+
+Then restart Claude Code (or run `/mcp` → reconnect in an active session). Verify with:
+
+```bash
+claude mcp list   # devmemory should show ✔ Connected
 ```
 
 ### Connect from Claude Desktop
@@ -74,13 +92,18 @@ Add to `~/.cursor/mcp.json`:
 }
 ```
 
-**Windows users**: If `devmemory` isn't on your PATH, use the full path or wrap with cmd:
+**Configuring manually?** Use the **absolute path** to the binary, not a bare
+`devmemory` — the tool's launch environment usually has a different PATH than your
+shell. Find it with `which devmemory` (macOS/Linux) or `where devmemory` (Windows):
+
 ```json
 {
-  "command": "cmd",
-  "args": ["/c", "devmemory"]
+  "command": "/full/path/to/devmemory",
+  "env": { "DEVMEMORY_API_KEY": "dm_key_YOUR_KEY_HERE" }
 }
 ```
+
+On Windows you can alternatively wrap with cmd: `"command": "cmd", "args": ["/c", "devmemory"]`.
 
 ---
 

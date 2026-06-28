@@ -144,12 +144,12 @@ ALL_TOOL_SLUGS = list(TOOLS.keys())
 
 def _build_mcp_entry(api_key: str, host: str | None = None) -> dict:
     """Build the standard devmemory MCP server entry."""
-    # Determine the command — use full path on Windows to avoid PATH issues
-    devmemory_bin = shutil.which("devmemory")
-    if platform.system() == "Windows":
-        command = devmemory_bin or "devmemory"
-    else:
-        command = "devmemory"
+    # Always prefer the absolute path to the installed binary. AI tools launch
+    # the MCP server with their own PATH (not the user's interactive shell PATH),
+    # so a bare "devmemory" only resolves when it happens to be on that PATH —
+    # producing intermittent "failed to connect" errors. Resolving the full path
+    # at install time makes the config work regardless of how the tool is launched.
+    command = shutil.which("devmemory") or "devmemory"
 
     env: dict[str, str] = {"DEVMEMORY_API_KEY": api_key}
     if host:
