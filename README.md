@@ -43,14 +43,17 @@ Same project, same memory, zero setup per tool.
 ### Install via PyPI (MCP server)
 
 ```bash
-# Run directly — no install needed
+# Run directly — no install needed (downloads latest PyPI release each time)
 uvx devmemory
 
-# Or install globally
+# Or install a persistent command
 pip install devmemory
 devmemory          # starts MCP server (stdio, for AI tools)
 devmemory --rest   # starts REST API (HTTP, for dashboards)
 ```
+
+> Working from a clone of this repo? `uvx` / `pip install devmemory` pull the
+> **published** version, not your local code. See [Development](#development) to run your checkout.
 
 ### Connect from Claude Desktop
 
@@ -197,6 +200,33 @@ uv run devmemory --rest
 # Run the MCP server locally (stdio)
 uv run devmemory
 ```
+
+> **Always run your local code with `uv run`** (or an editable install — see below).
+> `uvx devmemory` and `pip install devmemory` download the **published PyPI release**,
+> which may be older than your checkout and may lack newer flags like `--rest`.
+
+#### Using a plain `venv` instead of `uv`
+
+If you prefer `python -m venv`:
+
+```bash
+python -m venv venv
+source venv/bin/activate        # do this in every new terminal
+pip install -e .                # editable: links the command to your source
+```
+
+After `pip install -e .`, the `devmemory` command runs your local code and
+picks up edits without reinstalling.
+
+### Troubleshooting
+
+- **`devmemory: command not found`** — the command isn't on your PATH. Either you
+  used `uvx` (which never installs a persistent command) or your venv isn't active.
+  Run `source venv/bin/activate`, then `pip install -e .`.
+- **`No such option: --rest`** — you're running an old published build, not your
+  source. Reinstall from your checkout: `pip install -e .` (or use `uv run devmemory --rest`).
+  Verify with `pip show devmemory` — it should list an `Editable project location`
+  pointing at this repo.
 
 ### Environment variables
 
