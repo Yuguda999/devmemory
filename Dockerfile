@@ -18,10 +18,11 @@ COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
-# Install the project itself (source rarely shares a layer with deps).
+# Install the project itself (--no-editable copies it into the venv so the
+# runtime stage needs only /opt/venv, not the source tree).
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --no-editable
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
