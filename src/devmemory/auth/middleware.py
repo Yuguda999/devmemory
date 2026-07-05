@@ -21,8 +21,8 @@ from devmemory.db.repository import (
 )
 from devmemory.models import SubscriptionTier
 
-
 # ── Authenticated Context ──────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class AuthContext:
@@ -64,7 +64,7 @@ async def require_jwt_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
     user_id = payload["sub"]
 
@@ -90,6 +90,7 @@ async def require_jwt_user(
 
 # ── API Key Dependency (MCP / programmatic access) ────────────
 
+
 async def require_api_key_user(
     x_api_key: str | None = Header(None, alias="X-API-Key"),
     authorization: str | None = Header(None),
@@ -111,7 +112,9 @@ async def require_api_key_user(
     if raw_key is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key. Provide via X-API-Key header or Authorization: Bearer dm_key_...",
+            detail=(
+                "Missing API key. Provide via X-API-Key header or Authorization: Bearer dm_key_..."
+            ),
         )
 
     if not raw_key.startswith("dm_key_"):
@@ -152,7 +155,35 @@ async def require_api_key_user(
         )
 
 
+# ── Combined Dependency (dashboard JWT *or* MCP/client API key) ───
+
+
+async def require_user(
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+    authorization: str | None = Header(None),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> AuthContext:
+    """Authenticate via an API key **or** a JWT, so one endpoint serves both
+    the browser dashboard (JWT) and the MCP client / programmatic callers
+    (``X-API-Key`` or ``Authorization: Bearer dm_key_...``).
+
+    API-key auth wins when a key is present in either header; otherwise the
+    request is treated as a JWT bearer login.
+
+    Usage::
+
+        @router.post("/context")
+        async def save(auth: AuthContext = Depends(require_user)):
+            ...
+    """
+    api_key_present = bool(x_api_key) or bool(authorization and "dm_key_" in authorization)
+    if api_key_present:
+        return await require_api_key_user(x_api_key=x_api_key, authorization=authorization)
+    return await require_jwt_user(credentials=credentials)
+
+
 # ── Helpers ────────────────────────────────────────────────────
+
 
 def _extract_api_key(
     x_api_key: str | None,
@@ -191,4 +222,3 @@ def _resolve_tier(user: object) -> SubscriptionTier:
             return SubscriptionTier.FREE
 
     return SubscriptionTier.FREE
-

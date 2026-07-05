@@ -20,7 +20,6 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # ── Tool Definitions ───────────────────────────────────────────────────────────
 
 
@@ -58,7 +57,7 @@ TOOLS: dict[str, ToolConfig] = {
             "Windows": "~/.claude.json",
         },
         has_hook=True,
-        notes="Registers the DevMemory MCP server. Claude Code reads its instructions and drives save/restore via the MCP tools — no CLAUDE.md file hooks.",
+        notes="MCP-only: save/restore runs through the MCP tools; no CLAUDE.md file hooks.",
     ),
     "claude-desktop": ToolConfig(
         name="Claude Desktop",

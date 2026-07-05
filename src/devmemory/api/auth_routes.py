@@ -105,11 +105,11 @@ async def register(body: RegisterRequest) -> RegisterResponse:
                 password=body.password,
                 display_name=body.display_name,
             )
-        except IntegrityError:
+        except IntegrityError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="An account with this email already exists",
-            )
+            ) from exc
 
         return RegisterResponse(
             id=user.id,
