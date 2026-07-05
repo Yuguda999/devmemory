@@ -9,20 +9,22 @@ stored. Publishing the wheel + sdist happens in
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) whenever you
 publish a GitHub Release.
 
-## One-time setup (per project)
+## One-time setup (once, ~2 min)
 
-1. **Create the PyPI project via a Trusted Publisher** (you don't need to upload
-   anything first). On https://pypi.org → your account → **Publishing** → **Add a
-   pending publisher**:
-   - PyPI Project Name: `devmemory-ai`
-   - Owner: `Yuguda999`  ·  Repository: `devmemory`
-   - Workflow name: `publish.yml`
-   - Environment name: `pypi`
-2. **Create the `pypi` GitHub environment**: repo → Settings → Environments →
-   **New environment** → `pypi`. (Optionally add required reviewers so releases
-   need approval.)
+Tell PyPI to trust releases coming from this repo's workflow. On
+https://pypi.org (logged in) → avatar → **Your projects** isn't needed yet →
+go to **Account settings → Publishing → Add a pending publisher**, and fill in
+**exactly**:
 
-That's it — no secrets to paste.
+| Field | Value |
+|-------|-------|
+| PyPI Project Name | `devmemory-ai` |
+| Owner | `Yuguda999` |
+| Repository name | `devmemory` |
+| Workflow name | `publish.yml` |
+| Environment name | *(leave blank)* |
+
+Click **Add**. No tokens, no GitHub settings — done.
 
 ## Cutting a release
 
