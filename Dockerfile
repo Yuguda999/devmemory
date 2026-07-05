@@ -15,7 +15,9 @@ WORKDIR /app
 
 # Install dependencies first (cached layer — only re-runs when lockfile changes).
 # --extra postgres pulls in asyncpg so the image can talk to managed Postgres.
-COPY pyproject.toml uv.lock README.md ./
+# LICENSE is required because pyproject sets license-files = ["LICENSE"];
+# the build backend globs for it when building the wheel.
+COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --extra postgres
 
