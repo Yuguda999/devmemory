@@ -30,6 +30,8 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm install
       - run: npm test
-      - run: npm publish --provenance --access public
+      # Provenance is optional and adds OIDC/sigstore requirements; publish
+      # plainly first. Re-add `--provenance` once base publishing is confirmed.
+      - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
