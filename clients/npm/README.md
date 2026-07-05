@@ -13,10 +13,14 @@ No Python required.
 Point your tools at your DevMemory backend (get an API key from its dashboard):
 
 ```bash
-npx --yes devmemory install --tool cursor \
+npx --yes @commanderzero/devmemory install --tool cursor \
   --api-key dm_key_your_key \
   --host https://your-devmemory.onrender.com
 ```
+
+> Published as **`@commanderzero/devmemory`** on npm (the bare `devmemory` name is
+> blocked by npm as too similar to an existing package). The CLI command it
+> installs is still `devmemory`.
 
 Use `--all` to configure every detected tool, or `--tool <name>` for one of:
 `claude-code`, `cursor`, `windsurf`, `claude-desktop`, `antigravity`, `cline`,
@@ -29,7 +33,7 @@ That writes an MCP entry that launches the server via `npx`:
   "mcpServers": {
     "devmemory": {
       "command": "npx",
-      "args": ["-y", "devmemory", "mcp"],
+      "args": ["-y", "@commanderzero/devmemory", "mcp"],
       "env": {
         "DEVMEMORY_API_KEY": "dm_key_your_key",
         "DEVMEMORY_HOST": "https://your-devmemory.onrender.com"

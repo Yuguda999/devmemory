@@ -75,7 +75,7 @@ function mcpEntry(apiKey, host, client) {
   const env = { DEVMEMORY_API_KEY: apiKey };
   if (host) env.DEVMEMORY_HOST = host;
   if (client) env.DEVMEMORY_CLIENT = client;
-  return { command: "npx", args: ["-y", "devmemory", "mcp"], env };
+  return { command: "npx", args: ["-y", "@commanderzero/devmemory", "mcp"], env };
 }
 
 function toolPath(tool) {
