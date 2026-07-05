@@ -37,6 +37,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     "email-validator>=2.0.0",
     "mcp>=1.0.0",
+    # The MCP client talks to the REST API over HTTP — required at runtime.
+    "httpx>=0.27.0",
 ]
 
 [project.urls]
@@ -52,7 +54,6 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
-    "httpx>=0.27.0",
 ]
 postgres = [
     "asyncpg>=0.29.0",

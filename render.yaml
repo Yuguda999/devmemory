@@ -1,0 +1,28 @@
+# Render Blueprint — one-click deploy of the DevMemory REST/dashboard backend.
+#
+# Usage: push this repo to GitHub, then in Render: New → Blueprint → pick the
+# repo. Render reads this file and creates the service. You must paste your Neon
+# connection string into DEVMEMORY_DATABASE_URL (it's marked sync:false so it is
+# NOT stored in git). See docs/DEPLOY.md for the full walkthrough.
+services:
+  - type: web
+    name: devmemory
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free            # free tier spins down when idle (~30s cold start)
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DEVMEMORY_DEPLOYMENT_MODE
+        value: saas
+      - key: DEVMEMORY_LOG_LEVEL
+        value: INFO
+      # Render generates a strong secret at create time (no "change-me" default).
+      - key: DEVMEMORY_SECRET_KEY
+        generateValue: true
+      # Paste your Neon pooled connection string here in the Render dashboard.
+      # Must use the +asyncpg driver, e.g.:
+      #   postgresql+asyncpg://USER:PASSWORD@ep-xxx-pooler.REGION.aws.neon.tech/dbname?sslmode=require
+      # (sslmode=require is auto-translated to ssl=require for asyncpg.)
+      - key: DEVMEMORY_DATABASE_URL
+        sync: false

@@ -20,7 +20,12 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def get_engine() -> AsyncEngine:
-    """Return the shared async engine, creating it on first call."""
+    """Return the shared async engine, creating it on first call.
+
+    TLS for managed Postgres (Neon/Supabase) is carried in the URL as
+    ``?ssl=require`` (normalised from ``sslmode`` in config), so no per-host
+    handling is needed here.
+    """
     global _engine
     if _engine is None:
         connect_args = {}
