@@ -547,7 +547,7 @@ wheels = [
 ]
 
 [[package]]
-name = "devmemory"
+name = "devmemory-ai"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

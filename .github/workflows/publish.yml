@@ -1,0 +1,31 @@
+name: Publish to PyPI
+
+# Publishes the `devmemory-ai` distribution to PyPI when you publish a GitHub
+# Release. Uses PyPI Trusted Publishing (OIDC) — no API token stored anywhere.
+# One-time setup on PyPI is described in docs/PUBLISHING.md.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment: pypi          # must match the environment in the PyPI publisher
+    permissions:
+      id-token: write          # required for Trusted Publishing (OIDC)
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Verify the build (metadata + installability)
+        run: uvx twine check dist/*
+
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1

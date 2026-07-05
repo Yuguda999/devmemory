@@ -77,12 +77,16 @@ Copy the `dm_key_…` — it's shown once.
 
 ## Step 4 — Point tools at your backend
 
-On each machine, install the client and aim it at your hosted API:
+On each machine, install the client and aim it at your hosted API. The PyPI
+package is **`devmemory-ai`**; it provides the `devmemory` command:
 ```
-uvx devmemory install --all --api-key dm_key_… --host https://<your-app>.onrender.com
+uvx --from devmemory-ai devmemory install --all --api-key dm_key_… --host https://<your-app>.onrender.com
+# or:  pipx install devmemory-ai   &&   devmemory install --all --api-key dm_key_… --host …
 ```
 Restart the AI tool. The MCP client now saves/reads context through your backend.
-(Until the client is on PyPI — Phase 4 — use `uvx --from git+https://github.com/Yuguda999/devmemory devmemory install …`.)
+
+> Before the first PyPI release (see [PUBLISHING.md](PUBLISHING.md)), install from
+> git instead: `uvx --from git+https://github.com/Yuguda999/devmemory devmemory install …`
 
 ---
 
