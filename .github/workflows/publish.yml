@@ -4,9 +4,12 @@ name: Publish to PyPI
 # Release. Uses PyPI Trusted Publishing (OIDC) — no API token stored anywhere.
 # One-time setup on PyPI is described in docs/PUBLISHING.md.
 
+# Fires when you push a version tag like v0.1.0. (Tag-push runs the workflow from
+# the tagged commit, so it works from any branch — no merge to main required.)
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
 
 jobs:
   build-and-publish:

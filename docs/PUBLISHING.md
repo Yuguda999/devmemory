@@ -28,20 +28,26 @@ Click **Add**. No tokens, no GitHub settings — done.
 
 ## Cutting a release
 
-1. Bump `version` in `pyproject.toml` (e.g. `0.1.0` → `0.1.1`) and update
-   `CHANGELOG.md`. Commit + push.
-2. Tag it and create a GitHub Release:
-   ```
-   git tag v0.1.0 && git push origin v0.1.0
-   ```
-   Then GitHub → **Releases → Draft a new release** → pick the tag → **Publish**.
-3. The `Publish to PyPI` workflow builds (`uv build`), runs `twine check`, and
-   publishes via Trusted Publishing. Watch the Actions tab.
-4. Verify:
-   ```
-   pip index versions devmemory-ai      # new version listed
-   uvx --from devmemory-ai devmemory --help
-   ```
+Publishing is triggered by pushing a **version tag**. For the first release
+(version is already `0.1.0` in `pyproject.toml`):
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+That's it. Pushing the tag runs `.github/workflows/publish.yml`, which builds,
+`twine check`s, and uploads to PyPI. Watch it at
+**github.com/Yuguda999/devmemory → Actions**. Green = live.
+
+For later releases: bump `version` in `pyproject.toml` (PyPI won't accept a
+duplicate), commit, then tag the new version (`git tag v0.1.1 && git push origin v0.1.1`).
+
+Verify a published release:
+```
+pip index versions devmemory-ai
+uvx --from devmemory-ai devmemory --help
+```
 
 ## Local dry run (optional)
 
