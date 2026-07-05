@@ -47,7 +47,9 @@ def create_app() -> FastAPI:
     # ── CORS ───────────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if settings.is_self_hosted else [
+        allow_origins=["*"]
+        if settings.is_self_hosted
+        else [
             "https://devmemory.io",
             "http://localhost:3000",
             "http://localhost:8765",

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 # ── Section metadata ───────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class _Section:
     block_type: str
@@ -31,13 +32,13 @@ class _Section:
 
 
 _SECTIONS: list[_Section] = [
-    _Section("goal",      "🎯 Goals",         "The objectives for this session:"),
-    _Section("decision",  "🧩 Key Decisions", "Decisions made that shape the implementation:"),
-    _Section("code",      "💻 Code Context",  "Relevant code snippets and implementation details:"),
-    _Section("error",     "🐛 Known Errors",  "Errors encountered (may still be open):"),
-    _Section("next_step", "👣 Next Steps",    "What to work on next, in order:"),
-    _Section("task",      "✅ Tasks",         "Task checklist:"),
-    _Section("note",      "📝 Notes",         "Additional context and notes:"),
+    _Section("goal", "🎯 Goals", "The objectives for this session:"),
+    _Section("decision", "🧩 Key Decisions", "Decisions made that shape the implementation:"),
+    _Section("code", "💻 Code Context", "Relevant code snippets and implementation details:"),
+    _Section("error", "🐛 Known Errors", "Errors encountered (may still be open):"),
+    _Section("next_step", "👣 Next Steps", "What to work on next, in order:"),
+    _Section("task", "✅ Tasks", "Task checklist:"),
+    _Section("note", "📝 Notes", "Additional context and notes:"),
 ]
 
 _SECTION_ORDER: dict[str, int] = {s.block_type: i for i, s in enumerate(_SECTIONS)}
@@ -74,7 +75,7 @@ _PREAMBLES: dict[str, str] = {
 def generate_resume_prompt(
     project_name: str,
     session_title: str,
-    blocks: list["ContextBlock"],
+    blocks: list[ContextBlock],
     target_tool: str = "generic",
     session_id: str | None = None,
 ) -> str:
@@ -92,8 +93,8 @@ def generate_resume_prompt(
     """
     preamble = _PREAMBLES.get(target_tool.lower(), _PREAMBLES["generic"])
 
-    grouped: dict[str, list["ContextBlock"]] = {}
-    unknown: list["ContextBlock"] = []
+    grouped: dict[str, list[ContextBlock]] = {}
+    unknown: list[ContextBlock] = []
 
     for block in blocks:
         bt = (block.block_type or "").lower()
@@ -112,7 +113,7 @@ def generate_resume_prompt(
         lines.append(f"## DevMemory Session ID: {session_id}")
         lines.append(
             "> Pass this session_id to DevMemory tools "
-            "(e.g. `save_context(session_id=\"{session_id}\")`) "
+            '(e.g. `save_context(session_id="{session_id}")`) '
             "to continue this exact session."
         )
     lines.append("")
@@ -129,13 +130,16 @@ def generate_resume_prompt(
             if section.block_type == "task":
                 status = block.extra_metadata.get("status", "pending")
                 marker = "[ ]"
-                if status == "in_progress": marker = "[/]"
-                elif status == "done": marker = "[x]"
-                elif status == "skipped": marker = "[-]"
-                indented = "\n".join(f"  {l}" for l in content.splitlines())
+                if status == "in_progress":
+                    marker = "[/]"
+                elif status == "done":
+                    marker = "[x]"
+                elif status == "skipped":
+                    marker = "[-]"
+                indented = "\n".join(f"  {ln}" for ln in content.splitlines())
                 lines.append(f"- {marker} {indented.lstrip()}")
             else:
-                indented = "\n".join(f"  {l}" for l in content.splitlines())
+                indented = "\n".join(f"  {ln}" for ln in content.splitlines())
                 lines.append(f"- {indented.lstrip()}")
         lines.append("")
 

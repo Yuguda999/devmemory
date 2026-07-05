@@ -319,9 +319,9 @@ class TestConnectionRoutes:
 
         now = _now()
         conns = [
-            _Conn(client="cursor", last_seen_at=now),                       # connected
+            _Conn(client="cursor", last_seen_at=now),  # connected
             _Conn(client="claude-code", last_seen_at=now - timedelta(minutes=30)),  # idle
-            _Conn(client="windsurf", last_seen_at=now - timedelta(hours=5)),        # offline
+            _Conn(client="windsurf", last_seen_at=now - timedelta(hours=5)),  # offline
         ]
 
         with patch(

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-from sqlalchemy import select
-
 from devmemory.models import (
     ApiKey,
     Base,
@@ -269,7 +266,11 @@ class TestContextBlockModel:
             block_type=BlockType.CODE.value,
             content="def create_token(data): ...",
         )
-        block.extra_metadata = {"file_path": "auth.py", "language": "python", "line_range": [10, 25]}
+        block.extra_metadata = {
+            "file_path": "auth.py",
+            "language": "python",
+            "line_range": [10, 25],
+        }
         db_session.add(block)
         await db_session.flush()
 
@@ -294,9 +295,7 @@ class TestContextBlockModel:
         db_session.add(project)
         await db_session.flush()
 
-        session = Session(
-            project_id=project.id, title="Empty test", tool_source="gemini"
-        )
+        session = Session(project_id=project.id, title="Empty test", tool_source="gemini")
         db_session.add(session)
         await db_session.flush()
 
@@ -313,9 +312,17 @@ class TestContextBlockModel:
     async def test_all_block_types_valid(self):
         """All expected block types exist."""
         expected = {
-            "goal", "decision", "code", "file_ref", "error",
-            "insight", "next_step", "dependency", "blocker",
-            "task", "note",
+            "goal",
+            "decision",
+            "code",
+            "file_ref",
+            "error",
+            "insight",
+            "next_step",
+            "dependency",
+            "blocker",
+            "task",
+            "note",
         }
         actual = {bt.value for bt in BlockType}
         assert actual == expected
@@ -330,9 +337,7 @@ class TestContextBlockModel:
         db_session.add(project)
         await db_session.flush()
 
-        session = Session(
-            project_id=project.id, title="Pri test", tool_source="cursor"
-        )
+        session = Session(project_id=project.id, title="Pri test", tool_source="cursor")
         db_session.add(session)
         await db_session.flush()
 
@@ -374,8 +379,12 @@ class TestTableRegistry:
 
     async def test_all_tables_registered(self):
         expected_tables = {
-            "users", "api_keys", "subscriptions",
-            "projects", "sessions", "context_blocks",
+            "users",
+            "api_keys",
+            "subscriptions",
+            "projects",
+            "sessions",
+            "context_blocks",
             "tool_connections",
         }
         actual_tables = set(Base.metadata.tables.keys())

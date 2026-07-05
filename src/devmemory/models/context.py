@@ -42,27 +42,40 @@ class ContextBlock(UUIDPrimaryKeyMixin, Base):
         String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     block_type: Mapped[str] = mapped_column(
-        String(30), nullable=False, index=True,
-        comment="One of: goal, decision, code, file_ref, error, insight, next_step, dependency, blocker, task, note",
+        String(30),
+        nullable=False,
+        index=True,
+        comment=(
+            "One of: goal, decision, code, file_ref, error, insight, "
+            "next_step, dependency, blocker, task, note"
+        ),
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     meta_json: Mapped[str | None] = mapped_column(
-        Text, nullable=True,
+        Text,
+        nullable=True,
         comment="JSON-encoded metadata (file_path, language, line_range, tags, etc.)",
     )
     priority: Mapped[int] = mapped_column(
-        Integer, default=5, nullable=False,
+        Integer,
+        default=5,
+        nullable=False,
         comment="1-10 priority for resume prompt ordering (10 = highest)",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False,
+        DateTime(timezone=True),
+        default=_utcnow,
+        nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False,
+        DateTime(timezone=True),
+        default=_utcnow,
+        onupdate=_utcnow,
+        nullable=False,
     )
 
     # ── Relationships ───────────────────────────────────────────
-    session: Mapped["Session"] = relationship(  # noqa: F821
+    session: Mapped[Session] = relationship(  # noqa: F821
         "Session", back_populates="context_blocks"
     )
 

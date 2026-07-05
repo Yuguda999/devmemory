@@ -194,6 +194,9 @@ def run_inject(args) -> None:
     _ensure_gitignore(cwd)
 
     # Summary
-    print(f"✅ devmemory inject: Loaded context for '{project}' — '{session_title}' ({block_count} blocks)")
+    print(
+        f"✅ devmemory inject: Loaded context for '{project}' — "
+        f"'{session_title}' ({block_count} blocks)"
+    )
     for p in written_to:
         print(f"   Written to: {p}")

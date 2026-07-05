@@ -91,7 +91,7 @@ class Settings(BaseSettings):
         # depends on the process's working directory (which is the whole bug).
         for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
             if value.startswith(prefix):
-                path_part = value[len(prefix):]
+                path_part = value[len(prefix) :]
                 # 4th slash = already absolute (sqlite:////abs/path); leave it.
                 if path_part and not path_part.startswith("/") and not path_part.startswith("~"):
                     rel = path_part.lstrip("./")

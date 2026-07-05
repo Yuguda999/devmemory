@@ -31,12 +31,13 @@ from devmemory.db.repository import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_GUEST_EMAIL    = "admin@localhost"
+_GUEST_EMAIL = "admin@localhost"
 _GUEST_PASSWORD = "self-hosted-local-instance"
-_GUEST_NAME     = "Local Admin"
+_GUEST_NAME = "Local Admin"
 
 
 # ── Self-Hosted Guest Token ────────────────────────────────────
+
 
 @router.post(
     "/guest-token",
@@ -75,6 +76,7 @@ async def guest_token() -> LoginResponse:
 
 
 # ── Registration ───────────────────────────────────────────────
+
 
 @router.post(
     "/register",
@@ -122,6 +124,7 @@ async def register(body: RegisterRequest) -> RegisterResponse:
 
 # ── Login ──────────────────────────────────────────────────────
 
+
 @router.post(
     "/login",
     response_model=LoginResponse,
@@ -159,6 +162,7 @@ async def login(body: LoginRequest) -> LoginResponse:
 
 
 # ── API Key Management ────────────────────────────────────────
+
 
 @router.post(
     "/api-keys",

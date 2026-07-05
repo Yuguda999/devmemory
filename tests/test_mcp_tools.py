@@ -33,15 +33,25 @@ class TestSaveContext:
     async def test_posts_to_context_endpoint(self):
         from devmemory.tools import save_context
 
-        api = AsyncMock(return_value={
-            "ok": True, "block_id": "b1", "session_id": "s1",
-            "project_slug": "user-myproject", "block_type": "goal",
-        })
-        with patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj(remote_url="https://x/y"))), \
-             patch(_API, api):
+        api = AsyncMock(
+            return_value={
+                "ok": True,
+                "block_id": "b1",
+                "session_id": "s1",
+                "project_slug": "user-myproject",
+                "block_type": "goal",
+            }
+        )
+        with (
+            patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj(remote_url="https://x/y"))),
+            patch(_API, api),
+        ):
             result = await save_context(
-                block_type="Goal", content="  Finish the MCP layer  ",
-                cwd="/home/user/myproject", session_id="s1", priority=7,
+                block_type="Goal",
+                content="  Finish the MCP layer  ",
+                cwd="/home/user/myproject",
+                session_id="s1",
+                priority=7,
             )
 
         assert result["ok"] is True
@@ -49,12 +59,14 @@ class TestSaveContext:
         method, path = api.call_args.args[0], api.call_args.args[1]
         body = api.call_args.kwargs["json"]
         assert (method, path) == ("POST", "/context")
-        assert body["block_type"] == "goal"           # normalised
+        assert body["block_type"] == "goal"  # normalised
         assert body["content"] == "Finish the MCP layer"  # stripped
         assert body["priority"] == 7
         assert body["session_id"] == "s1"
         assert body["project"] == {
-            "slug": "user-myproject", "name": "myproject", "remote_url": "https://x/y",
+            "slug": "user-myproject",
+            "name": "myproject",
+            "remote_url": "https://x/y",
         }
 
     async def test_invalid_block_type_returns_error_without_calling_api(self):
@@ -87,7 +99,10 @@ class TestSaveContext:
         monkeypatch.delenv("DEVMEMORY_API_KEY", raising=False)
         with patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj())):
             result = await save_context(
-                block_type="goal", content="x", cwd="/tmp", api_key=None,
+                block_type="goal",
+                content="x",
+                cwd="/tmp",
+                api_key=None,
             )
         assert result["ok"] is False
         assert "DEVMEMORY_API_KEY" in result["error"]
@@ -102,10 +117,14 @@ class TestSaveTasks:
     async def test_posts_tasks(self):
         from devmemory.tools import save_tasks
 
-        api = AsyncMock(return_value={
-            "ok": True, "session_id": "s1", "project_slug": "user-myproject",
-            "task_ids": ["t1", "t2"],
-        })
+        api = AsyncMock(
+            return_value={
+                "ok": True,
+                "session_id": "s1",
+                "project_slug": "user-myproject",
+                "task_ids": ["t1", "t2"],
+            }
+        )
         with patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj())), patch(_API, api):
             result = await save_tasks(
                 tasks=[{"title": "A"}, {"description": "no title", "priority": 8}],
@@ -116,7 +135,7 @@ class TestSaveTasks:
         body = api.call_args.kwargs["json"]
         assert api.call_args.args[:2] == ("POST", "/context/tasks")
         assert body["tasks"][0]["title"] == "A"
-        assert body["tasks"][1]["title"] == "Task 2"   # default title
+        assert body["tasks"][1]["title"] == "Task 2"  # default title
         assert body["tasks"][1]["priority"] == 8
 
     async def test_empty_tasks_returns_error(self):
@@ -159,10 +178,15 @@ class TestGetContext:
     async def test_by_session_id(self):
         from devmemory.tools import get_context
 
-        api = AsyncMock(return_value={
-            "ok": True, "session_id": "s1", "session_title": "T",
-            "blocks": [{"id": "b1", "block_type": "goal", "content": "c"}], "count": 1,
-        })
+        api = AsyncMock(
+            return_value={
+                "ok": True,
+                "session_id": "s1",
+                "session_title": "T",
+                "blocks": [{"id": "b1", "block_type": "goal", "content": "c"}],
+                "count": 1,
+            }
+        )
         with patch(_API, api):
             result = await get_context(cwd="/tmp", session_id="s1")
         assert result["count"] == 1
@@ -173,8 +197,10 @@ class TestGetContext:
         from devmemory.tools import get_context
 
         api = AsyncMock(return_value={"ok": True, "session_id": None, "blocks": [], "count": 0})
-        with patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj(slug="user-proj"))), \
-             patch(_API, api):
+        with (
+            patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj(slug="user-proj"))),
+            patch(_API, api),
+        ):
             result = await get_context(cwd="/home/user/proj")
         assert result["count"] == 0
         assert api.call_args.kwargs["params"]["project_slug"] == "user-proj"
@@ -195,11 +221,16 @@ class TestStartSession:
     async def test_creates_session(self):
         from devmemory.tools import start_session
 
-        api = AsyncMock(return_value={
-            "ok": True, "session_id": "s-new", "project_id": "p1",
-            "project_slug": "user-myproject", "project_name": "myproject",
-            "project_created": True,
-        })
+        api = AsyncMock(
+            return_value={
+                "ok": True,
+                "session_id": "s-new",
+                "project_id": "p1",
+                "project_slug": "user-myproject",
+                "project_name": "myproject",
+                "project_created": True,
+            }
+        )
         with patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj())), patch(_API, api):
             result = await start_session(title="Build auth", cwd="/x", tool_source="cursor")
         assert result["session_id"] == "s-new"
@@ -256,8 +287,10 @@ class TestListSessions:
         from devmemory.tools import list_sessions_tool
 
         api = AsyncMock(return_value={"sessions": [{"id": "s1"}], "count": 1})
-        with patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj(slug="user-myproject"))), \
-             patch(_API, api):
+        with (
+            patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj(slug="user-myproject"))),
+            patch(_API, api),
+        ):
             result = await list_sessions_tool(cwd="/x", status="active")
         assert result["ok"] is True
         assert result["project_slug"] == "user-myproject"
@@ -275,10 +308,15 @@ class TestGenerateResumePrompt:
     async def test_returns_prompt(self):
         from devmemory.tools import generate_resume_prompt as grt
 
-        api = AsyncMock(return_value={
-            "ok": True, "session_id": "s1", "target_tool": "claude",
-            "block_count": 2, "prompt": "RESUME",
-        })
+        api = AsyncMock(
+            return_value={
+                "ok": True,
+                "session_id": "s1",
+                "target_tool": "claude",
+                "block_count": 2,
+                "prompt": "RESUME",
+            }
+        )
         with patch(_API, api):
             result = await grt(session_id="s1", target_tool="claude")
         assert result["prompt"] == "RESUME"
@@ -303,10 +341,12 @@ class TestListProjects:
     async def test_returns_projects(self):
         from devmemory.tools import list_projects_tool
 
-        api = AsyncMock(return_value={
-            "projects": [{"slug": "a-b", "name": "b"}, {"slug": "c-d", "name": "d"}],
-            "count": 2,
-        })
+        api = AsyncMock(
+            return_value={
+                "projects": [{"slug": "a-b", "name": "b"}, {"slug": "c-d", "name": "d"}],
+                "count": 2,
+            }
+        )
         with patch(_API, api):
             result = await list_projects_tool()
         assert result["ok"] is True

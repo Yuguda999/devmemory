@@ -57,7 +57,7 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     # ── Relationships ───────────────────────────────────────────
-    user: Mapped["User"] = relationship("User", back_populates="subscription")  # noqa: F821
+    user: Mapped[User] = relationship("User", back_populates="subscription")  # noqa: F821
 
     @property
     def is_active(self) -> bool:

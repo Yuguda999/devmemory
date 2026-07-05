@@ -5,14 +5,13 @@ All DB interactions are mocked — no real database required.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from devmemory.billing.quota import (
-    QuotaExceededError,
-    TierQuota,
     _UNLIMITED,
+    QuotaExceededError,
     _quota_for,
     check_block_quota,
     check_project_quota,
@@ -20,7 +19,6 @@ from devmemory.billing.quota import (
     get_usage_summary,
 )
 from devmemory.models.subscription import SubscriptionTier
-
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 

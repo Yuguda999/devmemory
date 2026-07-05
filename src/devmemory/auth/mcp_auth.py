@@ -15,6 +15,7 @@ Raises :exc:`ValueError` with a human-readable message if no valid key is found.
 
 from __future__ import annotations
 
+import contextlib
 import os
 
 from devmemory.db.engine import get_db_session
@@ -23,7 +24,6 @@ from devmemory.db.repository import (
     record_tool_connection,
     touch_api_key,
 )
-
 
 _ENV_VAR = "DEVMEMORY_API_KEY"
 _CLIENT_ENV_VAR = "DEVMEMORY_CLIENT"
@@ -65,10 +65,9 @@ async def resolve_mcp_api_key(api_key_arg: str | None = None) -> str:
         # DEVMEMORY_CLIENT by ``devmemory install``; absent that we fall back
         # to "unknown". Never let tracking failures break a tool call.
         client = os.environ.get(_CLIENT_ENV_VAR, "").strip() or "unknown"
-        try:
+        # Best-effort — never let connection tracking break a tool call.
+        with contextlib.suppress(Exception):  # pragma: no cover
             await record_tool_connection(db, user_id=user_id, client=client)
-        except Exception:  # pragma: no cover - tracking is best-effort
-            pass
 
         return user_id
 

@@ -145,9 +145,11 @@ def run() -> None:
 
     if args.command == "install":
         from devmemory.cli.install import run_install
+
         run_install(args)
     elif args.command == "inject":
         from devmemory.cli.inject import run_inject
+
         run_inject(args)
     elif args.rest:
         run_rest(host=args.host, port=args.port)

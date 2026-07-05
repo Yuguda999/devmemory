@@ -21,16 +21,16 @@ class ApiKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     prefix: Mapped[str] = mapped_column(
-        String(16), nullable=False, index=True,
+        String(16),
+        nullable=False,
+        index=True,
         comment="First 12 chars of the key for identification (e.g. dm_key_a1b2)",
     )
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ── Relationships ───────────────────────────────────────────
-    user: Mapped["User"] = relationship("User", back_populates="api_keys")  # noqa: F821
+    user: Mapped[User] = relationship("User", back_populates="api_keys")  # noqa: F821
 
     def __repr__(self) -> str:
         return f"<ApiKey {self.prefix}... name={self.name!r}>"

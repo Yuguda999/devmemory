@@ -141,9 +141,7 @@ class TestRepositoryAuth:
         raw_key, prefix = gen_key()
 
         # Create
-        key_record = await create_api_key_record(
-            db_session, user.id, raw_key, prefix, "test-key"
-        )
+        key_record = await create_api_key_record(db_session, user.id, raw_key, prefix, "test-key")
         assert key_record.name == "test-key"
         assert key_record.prefix == prefix
 

@@ -7,8 +7,8 @@ import secrets
 
 import bcrypt
 
-
 # ── Password Hashing ───────────────────────────────────────────
+
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password with bcrypt."""
@@ -28,6 +28,7 @@ def verify_password(password: str, hashed: str) -> bool:
 # without the cost of bcrypt for every request.
 # For passwords, bcrypt is essential because passwords are short and guessable.
 # For API keys (64 chars of entropy), SHA-256 is sufficient.
+
 
 def hash_api_key(raw_key: str) -> str:
     """Hash a raw API key with SHA-256 for fast lookup.

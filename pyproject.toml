@@ -82,6 +82,9 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 # in defaults is exactly how FastAPI declares dependencies and params.
 "src/devmemory/api/*.py" = ["B008"]
 "src/devmemory/auth/middleware.py" = ["B008"]
+# install.py is config data: long OS config-file paths and descriptive notes
+# that can't be meaningfully shortened.
+"src/devmemory/cli/install.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"
