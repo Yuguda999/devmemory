@@ -28,7 +28,6 @@ from devmemory.models.project import Project
 from devmemory.models.session import Session
 from devmemory.models.subscription import Subscription, SubscriptionTier
 
-
 # ── Quota limits by tier ───────────────────────────────────────────────────────
 
 _UNLIMITED = 2**31  # sentinel for "no practical limit"
@@ -77,9 +76,7 @@ class QuotaExceededError(Exception):
 
 async def _get_tier(db: AsyncSession, user_id: str) -> str:
     """Return the subscription tier string for a user, defaulting to FREE."""
-    result = await db.execute(
-        select(Subscription.tier).where(Subscription.user_id == user_id)
-    )
+    result = await db.execute(select(Subscription.tier).where(Subscription.user_id == user_id))
     tier = result.scalar_one_or_none()
     return tier if tier is not None else SubscriptionTier.FREE.value
 
@@ -123,9 +120,7 @@ async def check_project_quota(db: AsyncSession, user_id: str) -> None:
         )
 
 
-async def check_session_quota(
-    db: AsyncSession, user_id: str, project_id: str
-) -> None:
+async def check_session_quota(db: AsyncSession, user_id: str, project_id: str) -> None:
     """Raise QuotaExceededError if the user is at their sessions-per-project limit.
 
     Args:
@@ -143,9 +138,7 @@ async def check_session_quota(
         return
 
     result = await db.execute(
-        select(func.count())
-        .select_from(Session)
-        .where(Session.project_id == project_id)
+        select(func.count()).select_from(Session).where(Session.project_id == project_id)
     )
     count = result.scalar_one()
 
@@ -161,7 +154,9 @@ async def check_session_quota(
 
 
 async def check_block_quota(
-    db: AsyncSession, user_id: str, session_id: str  # noqa: ARG001
+    db: AsyncSession,
+    user_id: str,
+    session_id: str,  # noqa: ARG001
 ) -> None:
     """Raise QuotaExceededError if the session is at its context block limit.
 
@@ -180,9 +175,7 @@ async def check_block_quota(
         return
 
     result = await db.execute(
-        select(func.count())
-        .select_from(ContextBlock)
-        .where(ContextBlock.session_id == session_id)
+        select(func.count()).select_from(ContextBlock).where(ContextBlock.session_id == session_id)
     )
     count = result.scalar_one()
 
@@ -231,9 +224,7 @@ async def get_usage_summary(db: AsyncSession, user_id: str) -> dict:
                 else None
             ),
             "max_blocks_per_session": (
-                quota.max_blocks_per_session
-                if quota.max_blocks_per_session < _UNLIMITED
-                else None
+                quota.max_blocks_per_session if quota.max_blocks_per_session < _UNLIMITED else None
             ),
         },
         "usage": {

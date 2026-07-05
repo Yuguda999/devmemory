@@ -30,16 +30,14 @@ import asyncio
 
 
 def run_mcp() -> None:
-    """Start the MCP server using stdio transport."""
-    # Import here to ensure DB lifespan is wired before the MCP loop starts.
-    from devmemory.db.engine import init_db
+    """Start the MCP server using stdio transport.
+
+    The MCP server is a thin HTTP client of the REST API (see devmemory.tools);
+    it holds no database connection, so there is no DB to initialise here.
+    """
     from devmemory.tools import mcp
 
-    async def _main() -> None:
-        await init_db()
-        await mcp.run_stdio_async()
-
-    asyncio.run(_main())
+    asyncio.run(mcp.run_stdio_async())
 
 
 def run_rest(host: str | None = None, port: int | None = None) -> None:
@@ -147,9 +145,11 @@ def run() -> None:
 
     if args.command == "install":
         from devmemory.cli.install import run_install
+
         run_install(args)
     elif args.command == "inject":
         from devmemory.cli.inject import run_inject
+
         run_inject(args)
     elif args.rest:
         run_rest(host=args.host, port=args.port)

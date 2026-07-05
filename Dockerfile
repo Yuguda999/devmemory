@@ -14,15 +14,18 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies first (cached layer — only re-runs when lockfile changes).
-COPY pyproject.toml uv.lock README.md ./
+# --extra postgres pulls in asyncpg so the image can talk to managed Postgres.
+# LICENSE is required because pyproject sets license-files = ["LICENSE"];
+# the build backend globs for it when building the wheel.
+COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev --extra postgres
 
 # Install the project itself (--no-editable copies it into the venv so the
 # runtime stage needs only /opt/venv, not the source tree).
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+    uv sync --frozen --no-dev --no-editable --extra postgres
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
@@ -32,25 +35,33 @@ RUN useradd --create-home --uid 10001 app
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    # Persist the SQLite DB on a mounted volume by default.
+    # Self-host default; hosted deploys override with a Postgres URL.
     DEVMEMORY_DATABASE_URL="sqlite+aiosqlite:////data/devmemory.db" \
     DEVMEMORY_HOST=0.0.0.0 \
     DEVMEMORY_PORT=8765
 
 COPY --from=builder /opt/venv /opt/venv
 
-# Writable data dir for the SQLite database (mount a volume here in prod).
+# Writable data dir for the SQLite database (mount a volume here in self-host).
 RUN mkdir -p /data && chown app:app /data
 VOLUME ["/data"]
 
-USER app
 WORKDIR /home/app
+
+# Alembic config + migrations + entrypoint (needed to migrate on boot).
+COPY --chown=app:app alembic.ini ./alembic.ini
+COPY --chown=app:app alembic ./alembic
+COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
+USER app
 
 EXPOSE 8765
 
-# Container-native healthcheck against the REST /health endpoint.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/health').status==200 else 1)"
+# Container-native healthcheck against the REST /health endpoint. Reads the
+# active port ($PORT on managed platforms, else DEVMEMORY_PORT).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+    CMD python -c "import os,urllib.request,sys; p=os.environ.get('PORT') or os.environ.get('DEVMEMORY_PORT','8765'); sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/health').status==200 else 1)"
 
-# Start the REST API server (HTTP). For the MCP stdio server, override the CMD.
-CMD ["devmemory", "--rest"]
+# Migrate, then start the REST API (honours $PORT). Override for other commands.
+ENTRYPOINT ["./docker-entrypoint.sh"]

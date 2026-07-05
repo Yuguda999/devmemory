@@ -1,0 +1,46 @@
+{
+  "name": "@commanderzero/devmemory",
+  "version": "0.1.0",
+  "description": "DevMemory — persistent, cross-tool coding memory for AI agents (MCP client + CLI).",
+  "type": "module",
+  "bin": {
+    "devmemory": "./src/cli.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "memory",
+    "context",
+    "ai",
+    "llm",
+    "developer-tools",
+    "cursor",
+    "claude"
+  ],
+  "license": "MIT",
+  "author": "Yuguda Kolo",
+  "homepage": "https://github.com/Yuguda999/devmemory#readme",
+  "bugs": {
+    "url": "https://github.com/Yuguda999/devmemory/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yuguda999/devmemory.git",
+    "directory": "clients/npm"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.4.0",
+    "zod": "^3.23.8"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

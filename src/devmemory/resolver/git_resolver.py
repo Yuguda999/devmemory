@@ -106,11 +106,8 @@ def slugify_remote_url(url: str) -> str:
 
     # Remove host (everything before the first /)
     parts = cleaned.split("/", 1)
-    if len(parts) == 2:
-        path_part = parts[1]
-    else:
-        # Bare host with no path — unlikely, but handle it
-        path_part = parts[0]
+    # parts[1] is the path after the host; a bare host with no path uses parts[0].
+    path_part = parts[1] if len(parts) == 2 else parts[0]
 
     return _slugify_path_segments(path_part)
 
@@ -143,7 +140,10 @@ async def _get_remote_url(git_root: Path) -> str | None:
     """
     try:
         proc = await asyncio.create_subprocess_exec(
-            "git", "remote", "get-url", "origin",
+            "git",
+            "remote",
+            "get-url",
+            "origin",
             cwd=str(git_root),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

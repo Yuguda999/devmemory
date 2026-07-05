@@ -30,14 +30,21 @@ Same project, same memory, zero friction.
 ## 30-Second Quick Start
 
 ```bash
-# Install globally so the `devmemory` command is on your PATH
-pip install devmemory          # or: uv tool install devmemory  /  pipx install devmemory
+# Install globally so the `devmemory` command is on your PATH.
+# The PyPI package is `devmemory-ai`; it installs the `devmemory` command.
+pip install devmemory-ai       # or: uv tool install devmemory-ai  /  pipx install devmemory-ai
 
 devmemory          # starts MCP server (stdio, for AI tools)
 devmemory --rest   # starts REST API (HTTP, for dashboards)
 ```
 
-> **Install it for real — don't rely on `uvx devmemory` in MCP configs.** AI tools
+> **Prefer Node? No Python required.** Connect any tool via npm:
+> ```bash
+> npx -y @commanderzero/devmemory install --tool cursor --api-key dm_key_YOUR_KEY --host https://your-backend
+> ```
+> Same tools, same backend — it just runs the MCP client on Node instead.
+
+> **Install it for real — don't rely on `uvx` in MCP configs.** AI tools
 > launch the MCP server with their own environment, not your shell's PATH. A bare
 > `devmemory` (or `uvx`) only resolves if it happens to be on that PATH, which
 > causes intermittent "failed to connect" errors. The `devmemory install` command
@@ -66,7 +73,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "devmemory": {
       "command": "uvx",
-      "args": ["devmemory"],
+      "args": ["--from", "devmemory-ai", "devmemory"],
       "env": {
         "DEVMEMORY_API_KEY": "dm_key_your_key_here"
       }
@@ -233,8 +240,8 @@ uv run devmemory
 ```
 
 > **Always run your local code with `uv run`** (or an editable install — see below).
-> `uvx devmemory` and `pip install devmemory` download the **published PyPI release**,
-> which may be older than your checkout and may lack newer flags like `--rest`.
+> `uvx --from devmemory-ai devmemory` and `pip install devmemory-ai` download the
+> **published PyPI release**, which may be older than your checkout.
 
 #### Using a plain `venv` instead of `uv`
 

@@ -4,9 +4,32 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _normalize_asyncpg_url(url: str) -> str:
+    """Rewrite libpq query params into asyncpg-compatible ones.
+
+    Managed Postgres providers (Neon, Supabase) hand out URLs ending in
+    ``?sslmode=require&channel_binding=require``. asyncpg rejects ``sslmode``
+    and ``channel_binding`` as connect params, but SQLAlchemy's asyncpg dialect
+    honours ``?ssl=require`` (verified). So translate ``sslmode`` → ``ssl`` and
+    drop ``channel_binding``. The result works uniformly for both the app engine
+    and Alembic, which each build their own engine from this URL.
+    """
+    parts = urlsplit(url)
+    if not parts.query:
+        return url
+    out: list[tuple[str, str]] = []
+    for k, v in parse_qsl(parts.query, keep_blank_values=True):
+        kl = k.lower()
+        if kl == "channel_binding":
+            continue
+        out.append(("ssl", v) if kl == "sslmode" else (k, v))
+    return urlunsplit(parts._replace(query=urlencode(out)))
 
 
 class DeploymentMode(str, Enum):
@@ -91,13 +114,23 @@ class Settings(BaseSettings):
         # depends on the process's working directory (which is the whole bug).
         for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
             if value.startswith(prefix):
-                path_part = value[len(prefix):]
+                path_part = value[len(prefix) :]
                 # 4th slash = already absolute (sqlite:////abs/path); leave it.
                 if path_part and not path_part.startswith("/") and not path_part.startswith("~"):
                     rel = path_part.lstrip("./")
                     anchored = (Path.home() / ".devmemory" / rel).expanduser()
                     anchored.parent.mkdir(parents=True, exist_ok=True)
                     return f"{prefix}{anchored}"
+        # Force the async driver. Managed providers (Neon, Supabase, Heroku)
+        # hand out `postgresql://` or `postgres://`, which SQLAlchemy maps to the
+        # sync psycopg2 driver (not installed) — so paste-as-is would crash. We
+        # only ship asyncpg, so rewrite any bare/psycopg2 Postgres scheme to it.
+        for bare in ("postgresql+psycopg2://", "postgresql://", "postgres://"):
+            if value.startswith(bare):
+                value = "postgresql+asyncpg://" + value[len(bare) :]
+                break
+        if value.startswith("postgresql+asyncpg://"):
+            return _normalize_asyncpg_url(value)
         return value
 
     @property

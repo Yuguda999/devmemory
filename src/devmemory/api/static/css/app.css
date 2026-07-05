@@ -672,11 +672,44 @@ tbody td {
 @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
+/* ── Mobile nav: hamburger + off-canvas drawer ──────────── */
+.menu-toggle {
+  display: none;                 /* desktop: hidden (shown < 700px) */
+  position: fixed;
+  top: 12px; left: 12px;
+  z-index: 220;
+  width: 40px; height: 40px;
+  align-items: center; justify-content: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.menu-toggle:hover { background: var(--bg-elevated); }
+.sidebar-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 205;
+}
+.sidebar-backdrop.show { display: block; }
+
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 700px) {
-  :root { --sidebar-w: 0px; }
-  #sidebar { display: none; }
+  /* Sidebar slides in from the left instead of vanishing */
+  #sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: min(82vw, 280px);
+    transform: translateX(-100%);
+    z-index: 210;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  }
+  #sidebar.open { transform: translateX(0); }
+  .menu-toggle { display: inline-flex; }
   .page-header, .page-content { padding-left: 16px; padding-right: 16px; }
+  .page-header { padding-left: 64px; }   /* clear the fixed hamburger */
 }
 
 /* ── Two-col layout ─────────────────────────────────────── */

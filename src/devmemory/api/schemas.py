@@ -6,8 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
-
 # ── Auth: Register ─────────────────────────────────────────────
+
 
 class RegisterRequest(BaseModel):
     """User registration request."""
@@ -29,6 +29,7 @@ class RegisterResponse(BaseModel):
 
 # ── Auth: Login ────────────────────────────────────────────────
 
+
 class LoginRequest(BaseModel):
     """User login request."""
 
@@ -46,6 +47,7 @@ class LoginResponse(BaseModel):
 
 
 # ── API Keys ───────────────────────────────────────────────────
+
 
 class CreateApiKeyRequest(BaseModel):
     """Request to create a new API key."""
@@ -83,6 +85,7 @@ class ApiKeyListResponse(BaseModel):
 
 # ── Generic ────────────────────────────────────────────────────
 
+
 class MessageResponse(BaseModel):
     """Generic message response."""
 
@@ -96,6 +99,7 @@ class ErrorResponse(BaseModel):
 
 
 # ── Projects ───────────────────────────────────────────────────
+
 
 class ProjectResponse(BaseModel):
     """A single project."""
@@ -116,6 +120,7 @@ class ProjectListResponse(BaseModel):
 
 
 # ── Sessions ───────────────────────────────────────────────────
+
 
 class SessionResponse(BaseModel):
     """A single session."""
@@ -148,6 +153,7 @@ class UpdateSessionRequest(BaseModel):
 
 # ── Context Blocks ─────────────────────────────────────────────
 
+
 class ContextBlockResponse(BaseModel):
     """A single context block."""
 
@@ -168,7 +174,113 @@ class ContextBlockListResponse(BaseModel):
     count: int
 
 
+# ── Client / MCP API (API-key authenticated) ──────────────────
+#
+# Project resolution (git remote → slug/name) happens CLIENT-SIDE, because the
+# hosted server never has access to the caller's working directory. The client
+# resolves the project locally and passes the identifiers here.
+
+
+class ProjectRef(BaseModel):
+    """Client-resolved project identifiers sent with write requests."""
+
+    slug: str = Field(
+        min_length=1,
+        max_length=255,
+        description="URL-safe project id (git-remote or dir derived)",
+    )
+    name: str | None = Field(default=None, max_length=255)
+    remote_url: str | None = Field(default=None, max_length=1024)
+
+
+class SaveContextRequest(BaseModel):
+    """Save a single typed context block (mirrors the save_context tool)."""
+
+    project: ProjectRef
+    block_type: str = Field(
+        description="One of: goal, decision, code, error, next_step, note, task"
+    )
+    content: str = Field(min_length=1)
+    session_id: str | None = None
+    priority: int = Field(default=5, ge=1, le=10)
+
+
+class SaveContextResponse(BaseModel):
+    ok: bool = True
+    block_id: str
+    session_id: str
+    project_slug: str
+    block_type: str
+
+
+class TaskItem(BaseModel):
+    title: str = Field(min_length=1)
+    description: str | None = None
+    priority: int = Field(default=5, ge=1, le=10)
+
+
+class SaveTasksRequest(BaseModel):
+    """Save a batch of tasks as 'task' blocks (mirrors the save_tasks tool)."""
+
+    project: ProjectRef
+    tasks: list[TaskItem] = Field(min_length=1)
+    session_id: str | None = None
+
+
+class SaveTasksResponse(BaseModel):
+    ok: bool = True
+    session_id: str
+    project_slug: str
+    task_ids: list[str]
+
+
+class UpdateTaskStatusRequest(BaseModel):
+    status: str = Field(description="One of: pending, in_progress, done, skipped")
+
+
+class TaskStatusResponse(BaseModel):
+    ok: bool = True
+    block_id: str
+    status: str
+
+
+class StartSessionRequest(BaseModel):
+    """Begin a new session (mirrors the start_session tool)."""
+
+    project: ProjectRef
+    title: str = Field(min_length=1, max_length=500)
+    tool_source: str = "unknown"
+
+
+class StartSessionResponse(BaseModel):
+    ok: bool = True
+    session_id: str
+    project_id: str
+    project_slug: str
+    project_name: str
+    project_created: bool
+
+
+class GetContextResponse(BaseModel):
+    """Blocks for a project's latest active session or an explicit session."""
+
+    ok: bool = True
+    session_id: str | None
+    session_title: str | None = None
+    blocks: list[ContextBlockResponse]
+    count: int
+
+
+class ResumePromptResponse(BaseModel):
+    ok: bool = True
+    session_id: str
+    target_tool: str
+    block_count: int
+    prompt: str
+
+
 # ── Tool Connections ───────────────────────────────────────────
+
 
 class ToolConnectionResponse(BaseModel):
     """A connected AI tool and its derived live status."""
@@ -188,6 +300,7 @@ class ToolConnectionListResponse(BaseModel):
 
 
 # ── Billing ────────────────────────────────────────────────────
+
 
 class BillingLimits(BaseModel):
     """Quota limits for the user's current tier."""

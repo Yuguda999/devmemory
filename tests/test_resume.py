@@ -5,9 +5,8 @@ Pure-function tests — no DB required.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ── Minimal stub for ContextBlock ──────────────────────────────────────────────
 
@@ -32,7 +31,6 @@ def _make_blocks(*specs: tuple[str, str]) -> list[_Block]:
 
 
 from devmemory.tools.resume import generate_resume_prompt  # noqa: E402
-
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -88,8 +86,14 @@ class TestGenerateResumePrompt:
             ("note", "X"),
         )
         prompt = generate_resume_prompt("proj", "s", blocks)
-        for heading in ["🎯 Goals", "🧩 Key Decisions", "💻 Code Context",
-                        "🐛 Known Errors", "👣 Next Steps", "📝 Notes"]:
+        for heading in [
+            "🎯 Goals",
+            "🧩 Key Decisions",
+            "💻 Code Context",
+            "🐛 Known Errors",
+            "👣 Next Steps",
+            "📝 Notes",
+        ]:
             assert heading in prompt, f"Missing section: {heading}"
 
     def test_unknown_block_type_goes_to_additional_context(self):
@@ -151,9 +155,7 @@ class TestGenerateResumePrompt:
         assert "Step C" in prompt
 
     def test_session_id_embedded_in_prompt(self):
-        prompt = generate_resume_prompt(
-            "proj", "My Session", [], session_id="abc-123-def"
-        )
+        prompt = generate_resume_prompt("proj", "My Session", [], session_id="abc-123-def")
         assert "## DevMemory Session ID: abc-123-def" in prompt
         assert "save_context" in prompt  # usage hint present
 

@@ -31,12 +31,13 @@ from devmemory.db.repository import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_GUEST_EMAIL    = "admin@localhost"
+_GUEST_EMAIL = "admin@localhost"
 _GUEST_PASSWORD = "self-hosted-local-instance"
-_GUEST_NAME     = "Local Admin"
+_GUEST_NAME = "Local Admin"
 
 
 # ── Self-Hosted Guest Token ────────────────────────────────────
+
 
 @router.post(
     "/guest-token",
@@ -76,6 +77,7 @@ async def guest_token() -> LoginResponse:
 
 # ── Registration ───────────────────────────────────────────────
 
+
 @router.post(
     "/register",
     response_model=RegisterResponse,
@@ -105,11 +107,11 @@ async def register(body: RegisterRequest) -> RegisterResponse:
                 password=body.password,
                 display_name=body.display_name,
             )
-        except IntegrityError:
+        except IntegrityError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="An account with this email already exists",
-            )
+            ) from exc
 
         return RegisterResponse(
             id=user.id,
@@ -121,6 +123,7 @@ async def register(body: RegisterRequest) -> RegisterResponse:
 
 
 # ── Login ──────────────────────────────────────────────────────
+
 
 @router.post(
     "/login",
@@ -159,6 +162,7 @@ async def login(body: LoginRequest) -> LoginResponse:
 
 
 # ── API Key Management ────────────────────────────────────────
+
 
 @router.post(
     "/api-keys",

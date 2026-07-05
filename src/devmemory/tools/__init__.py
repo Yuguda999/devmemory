@@ -1,55 +1,42 @@
-"""DevMemory MCP tools — the core product layer.
+"""DevMemory MCP tools — a thin HTTP client over the DevMemory REST API.
 
-Seven tools that AI coding tools (Claude, Cursor, Windsurf, etc.) call via the
-Model Context Protocol to persist and retrieve coding context.
+The MCP server runs on the user's machine (each AI tool launches it). It does
+**not** touch the database directly: it authenticates to the DevMemory REST API
+with the user's API key and lets the server — which owns the database — perform
+every read and write. This keeps database credentials off client machines and
+lets one hosted backend serve every tool (Claude, Cursor, Windsurf, …).
 
-Tool list
----------
-* save_context          — Save a typed context block to the active session
-* get_context           — Retrieve context blocks for the current project/session
-* start_session         — Begin a new dev session (auto-resolves project from git)
-* end_session           — Mark a session complete or archived
-* list_sessions         — List recent sessions for a project
-* generate_resume_prompt — Produce an optimised "continue here" prompt
-* list_projects         — List all known projects for the user
+Only project/git resolution happens client-side (in :func:`resolve_project_slug`),
+because only the client can see the working directory. The resolved
+``slug``/``name``/``remote_url`` is sent to the API as a ``ProjectRef``.
 
-Authentication
---------------
-Every tool accepts an optional ``api_key`` argument. If omitted the
-``DEVMEMORY_API_KEY`` environment variable is used as a fallback.  See
-:mod:`devmemory.auth.mcp_auth` for details.
+Configuration:
+    DEVMEMORY_HOST      REST base URL (default ``http://localhost:8765``).
+    DEVMEMORY_API_KEY   API key, used when a tool call omits ``api_key``.
 """
 
 from __future__ import annotations
 
-import json
+import os
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 
-from devmemory.auth.mcp_auth import resolve_mcp_api_key
-from devmemory.billing.quota import (
-    QuotaExceededError,
-    check_block_quota,
-    check_project_quota,
-    check_session_quota,
-    get_usage_summary,
-)
-from devmemory.db.engine import get_db_session
-from devmemory.db.repository import (
-    create_bulk_context_blocks,
-    create_context_block,
-    create_session,
-    get_context_blocks,
-    get_or_create_project,
-    get_session,
-    list_projects,
-    list_sessions,
-    update_session,
-    update_context_block_status,
-)
+from devmemory.auth.mcp_auth import _pick_key
 from devmemory.models.context import BlockType
 from devmemory.resolver.git_resolver import resolve_project_slug
-from devmemory.tools.resume import generate_resume_prompt as _build_resume_prompt
+
+# ── Configuration ───────────────────────────────────────────────────────────────
+
+_DEFAULT_HOST = "http://localhost:8765"
+# Generous timeout: managed free tiers (Render/Fly) cold-start ~30-50s when idle,
+# so the first tool call after a lull must wait rather than fail.
+_TIMEOUT = 60.0
+
+
+def _host() -> str:
+    return (os.environ.get("DEVMEMORY_HOST") or _DEFAULT_HOST).rstrip("/")
+
 
 # ── FastMCP instance (imported by server.py) ───────────────────────────────────
 
@@ -63,20 +50,27 @@ mcp = FastMCP(
         "## CRITICAL: You MUST call save_context proactively. Do NOT wait to be asked.\n"
         "\n"
         "### When to call save_context:\n"
-        "- SESSION START: Immediately call save_context with block_type='goal' describing what the user wants to accomplish.\n"
-        "- AFTER EVERY FILE EDIT or code change: save block_type='code' with a summary of what was changed and why.\n"
-        "- AFTER EVERY KEY DECISION: save block_type='decision' when an architectural, design, or implementation choice is made.\n"
-        "- ON EVERY ERROR: save block_type='error' with the error message and what fix was attempted.\n"
+        "- SESSION START: Immediately call save_context with block_type='goal' "
+        "describing what the user wants to accomplish.\n"
+        "- AFTER EVERY FILE EDIT or code change: save block_type='code' with a "
+        "summary of what was changed and why.\n"
+        "- AFTER EVERY KEY DECISION: save block_type='decision' when an "
+        "architectural, design, or implementation choice is made.\n"
+        "- ON EVERY ERROR: save block_type='error' with the error message and "
+        "what fix was attempted.\n"
         "- BEFORE ENDING: save block_type='next_step' with exactly what needs to be done next.\n"
-        "- AT ANY NATURAL PAUSE: save block_type='note' with any context that would help someone picking this up fresh.\n"
+        "- AT ANY NATURAL PAUSE: save block_type='note' with any context that "
+        "would help someone picking this up fresh.\n"
         "\n"
         "### Task Tracking:\n"
-        "- WHEN CREATING A TASK LIST: call save_tasks with all tasks at once. Store returned task_ids.\n"
-        "- BEFORE STARTING each task: call update_task(block_id, \"in_progress\").\n"
-        "- AFTER COMPLETING each task: call update_task(block_id, \"done\").\n"
+        "- WHEN CREATING A TASK LIST: call save_tasks with all tasks at once. "
+        "Store returned task_ids.\n"
+        '- BEFORE STARTING each task: call update_task(block_id, "in_progress").\n'
+        '- AFTER COMPLETING each task: call update_task(block_id, "done").\n'
         "\n"
         "### When to call get_context or generate_resume_prompt:\n"
-        "- At the start of a session to restore prior work (check for existing context before starting).\n"
+        "- At the start of a session to restore prior work "
+        "(check for existing context before starting).\n"
         "- When the user says 'continue', 'resume', 'pick up where we left off', or similar.\n"
         "\n"
         "### Authentication:\n"
@@ -90,17 +84,9 @@ mcp = FastMCP(
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-
 _VALID_BLOCK_TYPES = {bt.value for bt in BlockType}
-
-
-def _validate_block_type(block_type: str) -> str:
-    """Normalise and validate a block_type string."""
-    norm = block_type.lower().strip()
-    if norm not in _VALID_BLOCK_TYPES:
-        valid = ", ".join(sorted(_VALID_BLOCK_TYPES))
-        raise ValueError(f"Invalid block_type '{block_type}'. Must be one of: {valid}")
-    return norm
+_VALID_TASK_STATUSES = {"pending", "in_progress", "done", "skipped"}
+_VALID_END_STATUSES = {"completed", "archived", "paused"}
 
 
 def _err(msg: str) -> dict:
@@ -108,9 +94,54 @@ def _err(msg: str) -> dict:
     return {"ok": False, "error": msg}
 
 
-def _ok(**kwargs) -> dict:
-    """Standard success response dict."""
-    return {"ok": True, **kwargs}
+def _project_ref(proj) -> dict:
+    """Build the ProjectRef payload from a resolved ProjectInfo."""
+    return {"slug": proj.slug, "name": proj.name, "remote_url": proj.remote_url}
+
+
+async def _api(
+    method: str,
+    path: str,
+    api_key: str | None,
+    *,
+    json: dict | None = None,
+    params: dict | None = None,
+) -> dict:
+    """Call the DevMemory REST API with the user's API key.
+
+    Returns the parsed JSON body on success, or an ``{"ok": False, "error": ...}``
+    dict on any failure (missing key, network error, or 4xx/5xx response) so tool
+    handlers can return it verbatim.
+    """
+    try:
+        key = _pick_key(api_key)
+    except ValueError as exc:
+        return _err(str(exc))
+
+    url = f"{_host()}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.request(
+                method, url, headers={"X-API-Key": key}, json=json, params=params
+            )
+    except httpx.RequestError as exc:
+        return _err(
+            f"Could not reach DevMemory at {_host()} ({exc}). "
+            "Set DEVMEMORY_HOST, or start the server with `devmemory --rest`."
+        )
+
+    if resp.status_code >= 400:
+        detail = None
+        try:
+            detail = resp.json().get("detail")
+        except Exception:
+            detail = None
+        return _err(detail or f"HTTP {resp.status_code}: {resp.text[:200]}")
+
+    try:
+        return resp.json()
+    except Exception:
+        return _err("Invalid (non-JSON) response from the DevMemory server")
 
 
 # ── Tool: save_context ─────────────────────────────────────────────────────────
@@ -128,101 +159,37 @@ async def save_context(
 ) -> dict:
     """Save a typed context block to the active session.
 
-    If no ``session_id`` is supplied a new session is automatically created
-    (or the most recent active session for the project is reused — caller
-    may pass ``session_id`` to be explicit).
+    If no ``session_id`` is supplied the server reuses the most recent active
+    session for the project, or creates one automatically.
 
     Args:
-        block_type: One of: goal, decision, code, error, next_step, note.
+        block_type: One of: goal, decision, code, error, next_step, note, task.
         content:    The context content to save.
-        cwd:        Working directory — used for automatic project detection
-                    via git remote URL.
+        cwd:        Working directory — resolved locally to a project (git remote).
         session_id: Optional existing session ID to append to.
         project:    Optional explicit project name (overrides git detection).
         priority:   Ordering weight for resume prompts (1–10, default 5).
         api_key:    DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-        bt = _validate_block_type(block_type)
-    except ValueError as exc:
-        return _err(str(exc))
-
+    norm = block_type.lower().strip()
+    if norm not in _VALID_BLOCK_TYPES:
+        valid = ", ".join(sorted(_VALID_BLOCK_TYPES))
+        return _err(f"Invalid block_type '{block_type}'. Must be one of: {valid}")
     if not content.strip():
         return _err("content must not be empty")
     if not 1 <= priority <= 10:
         return _err("priority must be between 1 and 10")
 
-    async with get_db_session() as db:
-        # ── Resolve / create project ──────────────────────────────────────────
-        proj_info = await resolve_project_slug(cwd, explicit_project=project)
-        proj, proj_is_new = await get_or_create_project(
-            db, user_id, proj_info.slug, name=proj_info.name, remote_url=proj_info.remote_url
-        )
-
-        # ── Quota: new project ────────────────────────────────────────────────
-        if proj_is_new:
-            try:
-                await check_project_quota(db, user_id)
-            except QuotaExceededError as exc:
-                return _err(str(exc))
-
-        # ── Resolve session ───────────────────────────────────────────────────
-        if session_id:
-            dev_session = await get_session(db, session_id, user_id)
-            if dev_session is None:
-                return _err(f"Session '{session_id}' not found or not accessible")
-        else:
-            # Try to reuse the latest active session for this project so that
-            # different AI tools converge on the same session automatically.
-            active = await list_sessions(
-                db, user_id, project_id=str(proj.id), status="active", limit=1,
-            )
-            if active:
-                dev_session = active[0]
-            else:
-                # ── Quota: new session ────────────────────────────────────────
-                try:
-                    await check_session_quota(db, user_id, str(proj.id))
-                except QuotaExceededError as exc:
-                    return _err(str(exc))
-
-                # No active session exists — create one
-                dev_session = await create_session(
-                    db,
-                    user_id=user_id,
-                    project_id=str(proj.id),
-                    title=f"Auto-session ({proj_info.name})",
-                    tool_source="devmemory-mcp",
-                )
-
-        if dev_session is None:
-            return _err("Could not resolve or create a session")
-
-        # ── Quota: new block ──────────────────────────────────────────────────
-        try:
-            await check_block_quota(db, user_id, str(dev_session.id))
-        except QuotaExceededError as exc:
-            return _err(str(exc))
-
-        # ── Save block ────────────────────────────────────────────────────────
-        block = await create_context_block(
-            db,
-            session_id=str(dev_session.id),
-            user_id=user_id,
-            block_type=bt,
-            content=content.strip(),
-            priority=priority,
-        )
-        if block is None:
-            return _err("Failed to save context block")
-
-    return _ok(
-        block_id=str(block.id),
-        session_id=str(dev_session.id),
-        project_slug=proj_info.slug,
-        block_type=bt,
-    )
+    proj = await resolve_project_slug(cwd, explicit_project=project)
+    payload: dict = {
+        "project": _project_ref(proj),
+        "block_type": norm,
+        "content": content.strip(),
+        "priority": priority,
+    }
+    if session_id:
+        payload["session_id"] = session_id
+    return await _api("POST", "/context", api_key, json=payload)
 
 
 # ── Tool: save_tasks ───────────────────────────────────────────────────────────
@@ -238,102 +205,34 @@ async def save_tasks(
 ) -> dict:
     """Save a list of tasks as individual 'task' context blocks.
 
-    Each task dict can contain:
-      - title (str): Short name of the task
-      - description (str, optional): Additional details
-      - priority (int, optional): 1-10 priority weight
+    Each task dict can contain: ``title`` (str), ``description`` (str, optional),
+    ``priority`` (int, optional).
 
     Args:
         tasks:      List of task dictionaries.
-        cwd:        Working directory — used for automatic project detection.
+        cwd:        Working directory — resolved locally to a project.
         session_id: Optional existing session ID to append to.
         project:    Optional explicit project name.
         api_key:    DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
-
     if not tasks:
         return _err("tasks list must not be empty")
 
-    async with get_db_session() as db:
-        # ── Resolve / create project ──────────────────────────────────────────
-        proj_info = await resolve_project_slug(cwd, explicit_project=project)
-        proj, proj_is_new = await get_or_create_project(
-            db, user_id, proj_info.slug, name=proj_info.name, remote_url=proj_info.remote_url
-        )
-
-        if proj_is_new:
-            try:
-                await check_project_quota(db, user_id)
-            except QuotaExceededError as exc:
-                return _err(str(exc))
-
-        # ── Resolve session ───────────────────────────────────────────────────
-        if session_id:
-            dev_session = await get_session(db, session_id, user_id)
-            if dev_session is None:
-                return _err(f"Session '{session_id}' not found or not accessible")
-        else:
-            active = await list_sessions(
-                db, user_id, project_id=str(proj.id), status="active", limit=1,
-            )
-            if active:
-                dev_session = active[0]
-            else:
-                try:
-                    await check_session_quota(db, user_id, str(proj.id))
-                except QuotaExceededError as exc:
-                    return _err(str(exc))
-                dev_session = await create_session(
-                    db,
-                    user_id=user_id,
-                    project_id=str(proj.id),
-                    title=f"Auto-session ({proj_info.name})",
-                    tool_source="devmemory-mcp",
-                )
-
-        if dev_session is None:
-            return _err("Could not resolve or create a session")
-
-        # ── Quota: new blocks ─────────────────────────────────────────────────
-        try:
-            # We check if there's quota for at least one block, though bulk might exceed it.
-            await check_block_quota(db, user_id, str(dev_session.id))
-        except QuotaExceededError as exc:
-            return _err(str(exc))
-
-        # ── Save blocks ───────────────────────────────────────────────────────
-        blocks_data = []
-        for i, t in enumerate(tasks):
-            content = t.get("title", f"Task {i+1}")
-            desc = t.get("description")
-            if desc:
-                content += f"\n\n{desc}"
-            
-            blocks_data.append({
-                "block_type": "task",
-                "content": content.strip(),
+    proj = await resolve_project_slug(cwd, explicit_project=project)
+    payload: dict = {
+        "project": _project_ref(proj),
+        "tasks": [
+            {
+                "title": t.get("title") or f"Task {i + 1}",
+                "description": t.get("description"),
                 "priority": t.get("priority", 5),
-                "meta_json": json.dumps({"status": "pending", "index": i}),
-            })
-            
-        blocks = await create_bulk_context_blocks(
-            db,
-            session_id=str(dev_session.id),
-            user_id=user_id,
-            blocks=blocks_data,
-        )
-        if blocks is None:
-            return _err("Failed to save task blocks")
-
-    return _ok(
-        session_id=str(dev_session.id),
-        project_slug=proj_info.slug,
-        task_ids=[str(b.id) for b in blocks],
-    )
+            }
+            for i, t in enumerate(tasks)
+        ],
+    }
+    if session_id:
+        payload["session_id"] = session_id
+    return await _api("POST", "/context/tasks", api_key, json=payload)
 
 
 # ── Tool: update_task ──────────────────────────────────────────────────────────
@@ -352,26 +251,15 @@ async def update_task(
     Args:
         block_id:   The task block ID returned from save_tasks.
         status:     The new status.
-        cwd:        Working directory.
-        session_id: Optional session ID.
+        cwd:        Working directory (unused; kept for tool-call compatibility).
+        session_id: Optional session ID (unused; kept for compatibility).
         api_key:    DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
-
-    valid_statuses = {"pending", "in_progress", "done", "skipped"}
-    if status not in valid_statuses:
-        return _err(f"status must be one of: {', '.join(sorted(valid_statuses))}")
-
-    async with get_db_session() as db:
-        block = await update_context_block_status(db, block_id, user_id, status)
-
-    if block is None:
-        return _err(f"Task block '{block_id}' not found or not accessible")
-
-    return _ok(block_id=block_id, status=status)
+    if status not in _VALID_TASK_STATUSES:
+        return _err(f"status must be one of: {', '.join(sorted(_VALID_TASK_STATUSES))}")
+    return await _api(
+        "PATCH", f"/context/blocks/{block_id}/status", api_key, json={"status": status}
+    )
 
 
 # ── Tool: get_context ──────────────────────────────────────────────────────────
@@ -388,71 +276,29 @@ async def get_context(
     """Retrieve context blocks for the current project / session.
 
     Args:
-        cwd:        Working directory — used for project detection if no
+        cwd:        Working directory — resolved locally to a project if no
                     ``session_id`` is given.
-        session_id: Specific session to query. If omitted, the most-recently
-                    updated active session for the project is used.
+        session_id: Specific session to query. If omitted, the latest active
+                    session for the project is used.
         block_type: Optional filter — return only blocks of this type.
         limit:      Maximum number of blocks to return (default 50).
-        api_key:    DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+        api_key:    DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
-
+    params: dict = {"limit": limit}
     if block_type is not None:
-        try:
-            block_type = _validate_block_type(block_type)
-        except ValueError as exc:
-            return _err(str(exc))
+        norm = block_type.lower().strip()
+        if norm not in _VALID_BLOCK_TYPES:
+            valid = ", ".join(sorted(_VALID_BLOCK_TYPES))
+            return _err(f"Invalid block_type '{block_type}'. Must be one of: {valid}")
+        params["block_type"] = norm
 
-    async with get_db_session() as db:
-        # ── Resolve session ───────────────────────────────────────────────────
-        if session_id:
-            dev_session = await get_session(db, session_id, user_id)
-            if dev_session is None:
-                return _err(f"Session '{session_id}' not found or not accessible")
-            resolved_session_id = session_id
-        else:
-            proj_info = await resolve_project_slug(cwd)
-            proj, _ = await get_or_create_project(
-                db, user_id, proj_info.slug, name=proj_info.name
-            )
-            sessions = await list_sessions(
-                db, user_id, project_id=str(proj.id), status="active", limit=1
-            )
-            if not sessions:
-                return _ok(blocks=[], count=0, session_id=None)
-            dev_session = sessions[0]
-            resolved_session_id = str(dev_session.id)
+    if session_id:
+        params["session_id"] = session_id
+    else:
+        proj = await resolve_project_slug(cwd)
+        params["project_slug"] = proj.slug
 
-        blocks = await get_context_blocks(
-            db,
-            session_id=resolved_session_id,
-            user_id=user_id,
-            block_type=block_type,
-            limit=limit,
-        )
-
-    if blocks is None:
-        return _err("Session not accessible")
-
-    return _ok(
-        session_id=resolved_session_id,
-        session_title=dev_session.title,
-        blocks=[
-            {
-                "id": str(b.id),
-                "block_type": b.block_type,
-                "content": b.content,
-                "priority": b.priority,
-                "created_at": b.created_at.isoformat(),
-            }
-            for b in blocks
-        ],
-        count=len(blocks),
-    )
+    return await _api("GET", "/context", api_key, params=params)
 
 
 # ── Tool: start_session ────────────────────────────────────────────────────────
@@ -468,61 +314,23 @@ async def start_session(
 ) -> dict:
     """Begin a new development session.
 
-    Automatically resolves the project from the git remote URL in ``cwd``
-    (or creates a new project if one doesn't exist yet).
-
     Args:
         title:       Human-readable session title, e.g. "Implement auth layer".
-        cwd:         Working directory — used for git-based project detection.
+        cwd:         Working directory — resolved locally to a project.
         tool_source: The AI tool starting this session (e.g. "claude", "cursor").
         project:     Optional explicit project name override.
-        api_key:     DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+        api_key:     DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
-
     if not title.strip():
         return _err("title must not be empty")
 
-    async with get_db_session() as db:
-        proj_info = await resolve_project_slug(cwd, explicit_project=project)
-        proj, proj_created = await get_or_create_project(
-            db, user_id, proj_info.slug, name=proj_info.name, remote_url=proj_info.remote_url
-        )
-
-        # ── Quota: new project ────────────────────────────────────────────────
-        if proj_created:
-            try:
-                await check_project_quota(db, user_id)
-            except QuotaExceededError as exc:
-                return _err(str(exc))
-
-        # ── Quota: new session ────────────────────────────────────────────────
-        try:
-            await check_session_quota(db, user_id, str(proj.id))
-        except QuotaExceededError as exc:
-            return _err(str(exc))
-
-        dev_session = await create_session(
-            db,
-            user_id=user_id,
-            project_id=str(proj.id),
-            title=title.strip(),
-            tool_source=tool_source.lower().strip() or "unknown",
-        )
-
-    if dev_session is None:
-        return _err("Failed to create session")
-
-    return _ok(
-        session_id=str(dev_session.id),
-        project_id=str(proj.id),
-        project_slug=proj_info.slug,
-        project_name=proj_info.name,
-        project_created=proj_created,
-    )
+    proj = await resolve_project_slug(cwd, explicit_project=project)
+    payload = {
+        "project": _project_ref(proj),
+        "title": title.strip(),
+        "tool_source": tool_source,
+    }
+    return await _api("POST", "/sessions", api_key, json=payload)
 
 
 # ── Tool: end_session ──────────────────────────────────────────────────────────
@@ -539,24 +347,19 @@ async def end_session(
     Args:
         session_id: The session ID returned by ``start_session``.
         status:     One of: completed, archived, paused (default: completed).
-        api_key:    DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+        api_key:    DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
+    if status not in _VALID_END_STATUSES:
+        return _err(f"status must be one of: {', '.join(sorted(_VALID_END_STATUSES))}")
 
-    valid_statuses = {"completed", "archived", "paused"}
-    if status not in valid_statuses:
-        return _err(f"status must be one of: {', '.join(sorted(valid_statuses))}")
-
-    async with get_db_session() as db:
-        updated = await update_session(db, session_id, user_id, status=status)
-
-    if updated is None:
-        return _err(f"Session '{session_id}' not found or not accessible")
-
-    return _ok(session_id=session_id, status=status)
+    result = await _api("PATCH", f"/sessions/{session_id}", api_key, json={"status": status})
+    if result.get("ok") is False:
+        return result
+    return {
+        "ok": True,
+        "session_id": result.get("id", session_id),
+        "status": result.get("status", status),
+    }
 
 
 # ── Tool: list_sessions ────────────────────────────────────────────────────────
@@ -573,46 +376,26 @@ async def list_sessions_tool(
     """List recent development sessions for the current project.
 
     Args:
-        cwd:     Working directory — used for project detection.
+        cwd:     Working directory — resolved locally to a project.
         project: Optional explicit project name override.
         status:  Optional filter: active, paused, completed, archived.
         limit:   Maximum sessions to return (default 10).
-        api_key: DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+        api_key: DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
+    proj = await resolve_project_slug(cwd, explicit_project=project)
+    params: dict = {"project_slug": proj.slug, "limit": limit}
+    if status:
+        params["status"] = status
 
-    async with get_db_session() as db:
-        proj_info = await resolve_project_slug(cwd, explicit_project=project)
-        proj, _ = await get_or_create_project(
-            db, user_id, proj_info.slug, name=proj_info.name
-        )
-
-        sessions = await list_sessions(
-            db,
-            user_id=user_id,
-            project_id=str(proj.id),
-            status=status,
-            limit=limit,
-        )
-
-    return _ok(
-        project_slug=proj_info.slug,
-        sessions=[
-            {
-                "id": str(s.id),
-                "title": s.title,
-                "status": s.status,
-                "tool_source": s.tool_source,
-                "created_at": s.created_at.isoformat(),
-                "updated_at": s.updated_at.isoformat(),
-            }
-            for s in sessions
-        ],
-        count=len(sessions),
-    )
+    result = await _api("GET", "/sessions", api_key, params=params)
+    if result.get("ok") is False:
+        return result
+    return {
+        "ok": True,
+        "project_slug": proj.slug,
+        "sessions": result.get("sessions", []),
+        "count": result.get("count", 0),
+    }
 
 
 # ── Tool: generate_resume_prompt ───────────────────────────────────────────────
@@ -626,46 +409,13 @@ async def generate_resume_prompt(
 ) -> dict:
     """Generate an optimised "continue here" prompt for switching AI tools.
 
-    Retrieves all context blocks for the given session and assembles them into
-    a structured prompt, ordered by semantic priority (goals → decisions →
-    code → errors → next steps → notes).
-
     Args:
         session_id:  The session to generate a prompt for.
         target_tool: Tailors the preamble: claude, cursor, windsurf, or generic.
-        api_key:     DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+        api_key:     DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
-
-    async with get_db_session() as db:
-        dev_session = await get_session(db, session_id, user_id)
-        if dev_session is None:
-            return _err(f"Session '{session_id}' not found or not accessible")
-
-        blocks = await get_context_blocks(
-            db, session_id=session_id, user_id=user_id, limit=200
-        )
-
-    if blocks is None:
-        return _err("Could not load context blocks")
-
-    project_name = dev_session.project.name if dev_session.project else "Unknown Project"
-    prompt = _build_resume_prompt(
-        project_name=project_name,
-        session_title=dev_session.title,
-        blocks=blocks,
-        target_tool=target_tool,
-        session_id=session_id,
-    )
-
-    return _ok(
-        session_id=session_id,
-        target_tool=target_tool,
-        block_count=len(blocks),
-        prompt=prompt,
+    return await _api(
+        "GET", f"/sessions/{session_id}/resume", api_key, params={"target_tool": target_tool}
     )
 
 
@@ -676,33 +426,14 @@ async def generate_resume_prompt(
 async def list_projects_tool(api_key: str | None = None) -> dict:
     """List all projects known to DevMemory for this account.
 
-    Also returns current usage vs tier limits so clients can surface
-    upgrade prompts when the user is near their quota.
-
     Args:
-        api_key: DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+        api_key: DevMemory API key.
     """
-    try:
-        user_id = await resolve_mcp_api_key(api_key)
-    except ValueError as exc:
-        return _err(str(exc))
-
-    async with get_db_session() as db:
-        projects = await list_projects(db, user_id)
-        usage = await get_usage_summary(db, user_id)
-
-    return _ok(
-        projects=[
-            {
-                "id": str(p.id),
-                "slug": p.slug,
-                "name": p.name,
-                "remote_url": p.remote_url,
-                "created_at": p.created_at.isoformat(),
-                "updated_at": p.updated_at.isoformat(),
-            }
-            for p in projects
-        ],
-        count=len(projects),
-        quota=usage,
-    )
+    result = await _api("GET", "/projects", api_key)
+    if result.get("ok") is False:
+        return result
+    return {
+        "ok": True,
+        "projects": result.get("projects", []),
+        "count": result.get("count", 0),
+    }

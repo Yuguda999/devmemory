@@ -28,7 +28,6 @@ from devmemory.models import (
     SessionStatus,
 )
 
-
 # ── Fixtures ───────────────────────────────────────────────────
 
 
@@ -56,18 +55,14 @@ async def project_a(db_session: AsyncSession, user_a):
 @pytest.fixture
 async def project_b(db_session: AsyncSession, user_b):
     """Create a project for user B."""
-    project, _ = await get_or_create_project(
-        db_session, user_b.id, "bob-api", name="Bob's API"
-    )
+    project, _ = await get_or_create_project(db_session, user_b.id, "bob-api", name="Bob's API")
     return project
 
 
 @pytest.fixture
 async def session_a(db_session: AsyncSession, user_a, project_a):
     """Create a session for user A's project."""
-    return await create_session(
-        db_session, user_a.id, project_a.id, "Build auth system", "cursor"
-    )
+    return await create_session(db_session, user_a.id, project_a.id, "Build auth system", "cursor")
 
 
 # ── Project Operations ─────────────────────────────────────────
@@ -115,9 +110,7 @@ class TestCreateSession:
 
     async def test_create_session_wrong_user_fails(self, db_session, user_b, project_a):
         """User B cannot create sessions in user A's project."""
-        result = await create_session(
-            db_session, user_b.id, project_a.id, "Hacking", "evil-tool"
-        )
+        result = await create_session(db_session, user_b.id, project_a.id, "Hacking", "evil-tool")
         assert result is None
 
 
@@ -175,7 +168,7 @@ class TestListSessions:
         assert sessions[0].title == "In project A"
 
     async def test_list_filtered_by_status(self, db_session, user_a, project_a):
-        s1 = await create_session(db_session, user_a.id, project_a.id, "Active", "cursor")
+        await create_session(db_session, user_a.id, project_a.id, "Active", "cursor")
         s2 = await create_session(db_session, user_a.id, project_a.id, "Paused", "cursor")
         s2.status = SessionStatus.PAUSED.value
         await db_session.flush()
@@ -212,22 +205,24 @@ class TestUpdateSession:
 
     async def test_update_status(self, db_session, user_a, session_a):
         updated = await update_session(
-            db_session, session_a.id, user_a.id,
+            db_session,
+            session_a.id,
+            user_a.id,
             status=SessionStatus.COMPLETED.value,
         )
         assert updated is not None
         assert updated.status == SessionStatus.COMPLETED.value
 
     async def test_update_title(self, db_session, user_a, session_a):
-        updated = await update_session(
-            db_session, session_a.id, user_a.id, title="Renamed session"
-        )
+        updated = await update_session(db_session, session_a.id, user_a.id, title="Renamed session")
         assert updated is not None
         assert updated.title == "Renamed session"
 
     async def test_update_wrong_user(self, db_session, user_b, session_a):
         result = await update_session(
-            db_session, session_a.id, user_b.id,
+            db_session,
+            session_a.id,
+            user_b.id,
             status=SessionStatus.ARCHIVED.value,
         )
         assert result is None
@@ -241,8 +236,11 @@ class TestCreateContextBlock:
 
     async def test_create_block(self, db_session, user_a, session_a):
         block = await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Add JWT authentication",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Add JWT authentication",
         )
         assert block is not None
         assert block.block_type == "goal"
@@ -252,8 +250,13 @@ class TestCreateContextBlock:
     async def test_create_block_with_metadata(self, db_session, user_a, session_a):
         meta = json.dumps({"file_path": "auth.py", "language": "python"})
         block = await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="code", content="def login():", meta_json=meta, priority=8,
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="code",
+            content="def login():",
+            meta_json=meta,
+            priority=8,
         )
         assert block is not None
         assert block.meta_json == meta
@@ -261,8 +264,11 @@ class TestCreateContextBlock:
 
     async def test_create_block_wrong_user(self, db_session, user_b, session_a):
         result = await create_context_block(
-            db_session, session_a.id, user_b.id,
-            block_type="goal", content="Hack!",
+            db_session,
+            session_a.id,
+            user_b.id,
+            block_type="goal",
+            content="Hack!",
         )
         assert result is None
 
@@ -276,9 +282,7 @@ class TestCreateBulkContextBlocks:
             {"block_type": "decision", "content": "Use JWT", "priority": 8},
             {"block_type": "next_step", "content": "Write tests"},
         ]
-        blocks = await create_bulk_context_blocks(
-            db_session, session_a.id, user_a.id, blocks_data
-        )
+        blocks = await create_bulk_context_blocks(db_session, session_a.id, user_a.id, blocks_data)
         assert blocks is not None
         assert len(blocks) == 3
         assert blocks[0].block_type == "goal"
@@ -287,7 +291,9 @@ class TestCreateBulkContextBlocks:
 
     async def test_bulk_create_wrong_user(self, db_session, user_b, session_a):
         result = await create_bulk_context_blocks(
-            db_session, session_a.id, user_b.id,
+            db_session,
+            session_a.id,
+            user_b.id,
             [{"block_type": "goal", "content": "Hack!"}],
         )
         assert result is None
@@ -299,8 +305,11 @@ class TestGetContextBlocks:
     async def test_get_all_blocks(self, db_session, user_a, session_a):
         for btype in ["goal", "decision", "code"]:
             await create_context_block(
-                db_session, session_a.id, user_a.id,
-                block_type=btype, content=f"Content for {btype}",
+                db_session,
+                session_a.id,
+                user_a.id,
+                block_type=btype,
+                content=f"Content for {btype}",
             )
 
         blocks = await get_context_blocks(db_session, session_a.id, user_a.id)
@@ -309,33 +318,48 @@ class TestGetContextBlocks:
 
     async def test_filter_by_type(self, db_session, user_a, session_a):
         await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Goal 1",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Goal 1",
         )
         await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="decision", content="Decision 1",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="decision",
+            content="Decision 1",
         )
         await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Goal 2",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Goal 2",
         )
 
-        goals = await get_context_blocks(
-            db_session, session_a.id, user_a.id, block_type="goal"
-        )
+        goals = await get_context_blocks(db_session, session_a.id, user_a.id, block_type="goal")
         assert goals is not None
         assert len(goals) == 2
         assert all(b.block_type == "goal" for b in goals)
 
     async def test_ordered_by_priority_desc(self, db_session, user_a, session_a):
         await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Low priority", priority=2,
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Low priority",
+            priority=2,
         )
         await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="High priority", priority=9,
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="High priority",
+            priority=9,
         )
 
         blocks = await get_context_blocks(db_session, session_a.id, user_a.id)
@@ -346,13 +370,14 @@ class TestGetContextBlocks:
     async def test_respects_limit(self, db_session, user_a, session_a):
         for i in range(5):
             await create_context_block(
-                db_session, session_a.id, user_a.id,
-                block_type="goal", content=f"Block {i}",
+                db_session,
+                session_a.id,
+                user_a.id,
+                block_type="goal",
+                content=f"Block {i}",
             )
 
-        blocks = await get_context_blocks(
-            db_session, session_a.id, user_a.id, limit=3
-        )
+        blocks = await get_context_blocks(db_session, session_a.id, user_a.id, limit=3)
         assert blocks is not None
         assert len(blocks) == 3
 
@@ -366,8 +391,11 @@ class TestUpdateContextBlock:
 
     async def test_update_content(self, db_session, user_a, session_a):
         block = await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Original",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Original",
         )
         updated = await update_context_block(
             db_session, block.id, user_a.id, content="Updated content"
@@ -377,23 +405,26 @@ class TestUpdateContextBlock:
 
     async def test_update_priority(self, db_session, user_a, session_a):
         block = await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Test", priority=3,
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Test",
+            priority=3,
         )
-        updated = await update_context_block(
-            db_session, block.id, user_a.id, priority=10
-        )
+        updated = await update_context_block(db_session, block.id, user_a.id, priority=10)
         assert updated is not None
         assert updated.priority == 10
 
     async def test_update_wrong_user(self, db_session, user_a, user_b, session_a):
         block = await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Alice's block",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Alice's block",
         )
-        result = await update_context_block(
-            db_session, block.id, user_b.id, content="Hacked!"
-        )
+        result = await update_context_block(db_session, block.id, user_b.id, content="Hacked!")
         assert result is None
 
     async def test_update_nonexistent_block(self, db_session, user_a):
@@ -408,22 +439,26 @@ class TestDeleteContextBlock:
 
     async def test_delete_block(self, db_session, user_a, session_a):
         block = await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="To be deleted",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="To be deleted",
         )
         success = await delete_context_block(db_session, block.id, user_a.id)
         assert success is True
 
         # Verify it's gone
-        result = await db_session.execute(
-            select(ContextBlock).where(ContextBlock.id == block.id)
-        )
+        result = await db_session.execute(select(ContextBlock).where(ContextBlock.id == block.id))
         assert result.scalar_one_or_none() is None
 
     async def test_delete_wrong_user(self, db_session, user_a, user_b, session_a):
         block = await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Protected",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Protected",
         )
         success = await delete_context_block(db_session, block.id, user_b.id)
         assert success is False
@@ -442,12 +477,18 @@ class TestCascadeDeletes:
     async def test_delete_session_cascades_blocks(self, db_session, user_a, session_a):
         """Deleting a session should delete all its context blocks."""
         await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="goal", content="Block 1",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="goal",
+            content="Block 1",
         )
         await create_context_block(
-            db_session, session_a.id, user_a.id,
-            block_type="code", content="Block 2",
+            db_session,
+            session_a.id,
+            user_a.id,
+            block_type="code",
+            content="Block 2",
         )
 
         # Reload the session with relationships so ORM cascade can track children
@@ -466,12 +507,13 @@ class TestCascadeDeletes:
 
     async def test_delete_project_cascades_sessions(self, db_session, user_a, project_a):
         """Deleting a project should cascade to sessions and blocks."""
-        s = await create_session(
-            db_session, user_a.id, project_a.id, "Temp session", "cursor"
-        )
+        s = await create_session(db_session, user_a.id, project_a.id, "Temp session", "cursor")
         await create_context_block(
-            db_session, s.id, user_a.id,
-            block_type="goal", content="Cascade test",
+            db_session,
+            s.id,
+            user_a.id,
+            block_type="goal",
+            content="Cascade test",
         )
 
         # Delete the project

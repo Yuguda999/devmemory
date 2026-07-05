@@ -17,22 +17,26 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     slug: Mapped[str] = mapped_column(
-        String(255), nullable=False, index=True,
+        String(255),
+        nullable=False,
+        index=True,
         comment="URL-safe identifier derived from git remote or explicit name",
     )
     name: Mapped[str] = mapped_column(
-        String(255), nullable=False,
+        String(255),
+        nullable=False,
         comment="Human-readable display name",
     )
     remote_url: Mapped[str | None] = mapped_column(
-        String(500), nullable=True,
+        String(500),
+        nullable=True,
         comment="Git remote origin URL, used for cross-machine project matching",
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ── Relationships ───────────────────────────────────────────
-    user: Mapped["User"] = relationship("User", back_populates="projects")  # noqa: F821
-    sessions: Mapped[list["Session"]] = relationship(  # noqa: F821
+    user: Mapped[User] = relationship("User", back_populates="projects")  # noqa: F821
+    sessions: Mapped[list[Session]] = relationship(  # noqa: F821
         "Session", back_populates="project", cascade="all, delete-orphan"
     )
 

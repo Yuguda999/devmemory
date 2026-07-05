@@ -1,0 +1,37 @@
+name: Publish to npm
+
+# Publishes the `devmemory` npm client (clients/npm) when you push a tag like
+# npm-v0.1.0. Kept on a separate tag prefix from the PyPI release (v*) so the two
+# ecosystems version independently.
+#
+# One-time setup: create an npm automation token and add it as the repo secret
+# NPM_TOKEN (Settings → Secrets and variables → Actions). Publishing also emits
+# build provenance via GitHub OIDC (id-token: write).
+
+on:
+  push:
+    tags:
+      - "npm-v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/npm
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install
+      - run: npm test
+      # Provenance is optional and adds OIDC/sigstore requirements; publish
+      # plainly first. Re-add `--provenance` once base publishing is confirmed.
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

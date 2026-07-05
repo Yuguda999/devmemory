@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
-import os
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
-
-import pytest
 
 from devmemory.resolver.git_resolver import (
-    ProjectInfo,
     _find_git_root,
     _slugify_name,
     _slugify_path_segments,
     resolve_project_slug,
     slugify_remote_url,
 )
-
 
 # ── URL Slugification ─────────────────────────────────────────
 
@@ -26,7 +19,10 @@ class TestSlugifyRemoteUrl:
     """Tests for converting git remote URLs to project slugs."""
 
     def test_https_with_git_suffix(self):
-        assert slugify_remote_url("https://github.com/Yuguda999/devmemory.git") == "yuguda999-devmemory"
+        assert (
+            slugify_remote_url("https://github.com/Yuguda999/devmemory.git")
+            == "yuguda999-devmemory"
+        )
 
     def test_https_without_git_suffix(self):
         assert slugify_remote_url("https://github.com/Yuguda999/devmemory") == "yuguda999-devmemory"

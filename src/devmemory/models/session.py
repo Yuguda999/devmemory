@@ -29,16 +29,20 @@ class Session(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     tool_source: Mapped[str] = mapped_column(
-        String(50), nullable=False,
+        String(50),
+        nullable=False,
         comment="Which AI tool created this session (cursor, claude, windsurf, gemini, etc.)",
     )
     status: Mapped[str] = mapped_column(
-        String(20), default=SessionStatus.ACTIVE.value, nullable=False, index=True,
+        String(20),
+        default=SessionStatus.ACTIVE.value,
+        nullable=False,
+        index=True,
     )
 
     # ── Relationships ───────────────────────────────────────────
-    project: Mapped["Project"] = relationship("Project", back_populates="sessions")  # noqa: F821
-    context_blocks: Mapped[list["ContextBlock"]] = relationship(  # noqa: F821
+    project: Mapped[Project] = relationship("Project", back_populates="sessions")  # noqa: F821
+    context_blocks: Mapped[list[ContextBlock]] = relationship(  # noqa: F821
         "ContextBlock", back_populates="session", cascade="all, delete-orphan"
     )
 

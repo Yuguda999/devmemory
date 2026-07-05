@@ -21,20 +21,21 @@ class ToolConnection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """A heartbeat record for one AI tool connected to DevMemory via MCP."""
 
     __tablename__ = "tool_connections"
-    __table_args__ = (
-        UniqueConstraint("user_id", "client", name="uq_tool_connection_user_client"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "client", name="uq_tool_connection_user_client"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     client: Mapped[str] = mapped_column(
-        String(50), nullable=False,
+        String(50),
+        nullable=False,
         comment="Tool slug from DEVMEMORY_CLIENT or MCP clientInfo (cursor, claude-code, ...)",
     )
     client_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False,
+        DateTime(timezone=True),
+        default=_utcnow,
+        nullable=False,
     )
 
     def __repr__(self) -> str:

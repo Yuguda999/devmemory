@@ -9,15 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from devmemory.api.app import create_app
-from devmemory.auth.middleware import AuthContext, require_jwt_user
+from devmemory.auth.middleware import AuthContext, require_jwt_user, require_user
 from devmemory.models.subscription import SubscriptionTier
-
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
@@ -79,6 +78,7 @@ def client():
     """Return a TestClient with JWT auth dependency overridden."""
     app = create_app()
     app.dependency_overrides[require_jwt_user] = lambda: _FAKE_AUTH
+    app.dependency_overrides[require_user] = lambda: _FAKE_AUTH
     return TestClient(app, raise_server_exceptions=True)
 
 
@@ -319,9 +319,9 @@ class TestConnectionRoutes:
 
         now = _now()
         conns = [
-            _Conn(client="cursor", last_seen_at=now),                       # connected
+            _Conn(client="cursor", last_seen_at=now),  # connected
             _Conn(client="claude-code", last_seen_at=now - timedelta(minutes=30)),  # idle
-            _Conn(client="windsurf", last_seen_at=now - timedelta(hours=5)),        # offline
+            _Conn(client="windsurf", last_seen_at=now - timedelta(hours=5)),  # offline
         ]
 
         with patch(

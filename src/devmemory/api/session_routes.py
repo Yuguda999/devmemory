@@ -8,20 +8,32 @@ from devmemory.api.schemas import (
     ContextBlockListResponse,
     ContextBlockResponse,
     MessageResponse,
+    ResumePromptResponse,
     SessionListResponse,
     SessionResponse,
+    StartSessionRequest,
+    StartSessionResponse,
     UpdateSessionRequest,
 )
-from devmemory.auth.middleware import AuthContext, require_jwt_user
+from devmemory.auth.middleware import AuthContext, require_jwt_user, require_user
+from devmemory.billing.quota import (
+    QuotaExceededError,
+    check_project_quota,
+    check_session_quota,
+)
 from devmemory.db.engine import get_db_session
 from devmemory.db.repository import (
+    create_session,
     delete_context_block,
     get_context_blocks,
+    get_or_create_project,
+    get_project_by_slug,
     get_session,
     list_sessions,
     update_session,
 )
 from devmemory.models.session import SessionStatus
+from devmemory.tools.resume import generate_resume_prompt as _build_resume_prompt
 
 router = APIRouter(tags=["sessions"])
 
@@ -38,13 +50,19 @@ _VALID_STATUSES = {s.value for s in SessionStatus}
 )
 async def list_sessions_endpoint(
     project_id: str | None = Query(default=None, description="Filter by project ID"),
-    session_status: str | None = Query(default=None, alias="status", description="Filter by status"),
+    project_slug: str | None = Query(
+        default=None, description="Filter by project slug (resolved client-side)"
+    ),
+    session_status: str | None = Query(
+        default=None, alias="status", description="Filter by status"
+    ),
     limit: int = Query(default=25, ge=1, le=100),
-    auth: AuthContext = Depends(require_jwt_user),
+    auth: AuthContext = Depends(require_user),
 ) -> SessionListResponse:
     """List development sessions for the authenticated user.
 
-    Optionally filter by ``project_id`` and/or ``status``.
+    Optionally filter by ``project_id``, ``project_slug`` (the MCP client passes
+    a slug it resolved locally), and/or ``status``.
     """
     if session_status is not None and session_status not in _VALID_STATUSES:
         raise HTTPException(
@@ -53,6 +71,12 @@ async def list_sessions_endpoint(
         )
 
     async with get_db_session() as db:
+        if project_slug and not project_id:
+            proj = await get_project_by_slug(db, auth.user_id, project_slug)
+            if proj is None:
+                return SessionListResponse(sessions=[], count=0)
+            project_id = str(proj.id)
+
         sessions = await list_sessions(
             db,
             user_id=auth.user_id,
@@ -86,7 +110,7 @@ async def list_sessions_endpoint(
 )
 async def get_session_endpoint(
     session_id: str,
-    auth: AuthContext = Depends(require_jwt_user),
+    auth: AuthContext = Depends(require_user),
 ) -> SessionResponse:
     """Retrieve a single session by ID."""
     async with get_db_session() as db:
@@ -121,7 +145,7 @@ async def get_session_endpoint(
 async def update_session_endpoint(
     session_id: str,
     body: UpdateSessionRequest,
-    auth: AuthContext = Depends(require_jwt_user),
+    auth: AuthContext = Depends(require_user),
 ) -> SessionResponse:
     """Partially update a session's title and/or status.
 
@@ -165,6 +189,105 @@ async def update_session_endpoint(
     )
 
 
+@router.post(
+    "/sessions",
+    response_model=StartSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Start a new session",
+    responses={402: {"description": "Quota exceeded"}},
+)
+async def start_session_endpoint(
+    body: StartSessionRequest,
+    auth: AuthContext = Depends(require_user),
+) -> StartSessionResponse:
+    """Begin a new development session for a client-resolved project."""
+    async with get_db_session() as db:
+        proj, proj_created = await get_or_create_project(
+            db,
+            auth.user_id,
+            body.project.slug,
+            name=body.project.name,
+            remote_url=body.project.remote_url,
+        )
+
+        if proj_created:
+            try:
+                await check_project_quota(db, auth.user_id)
+            except QuotaExceededError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)
+                ) from exc
+
+        try:
+            await check_session_quota(db, auth.user_id, str(proj.id))
+        except QuotaExceededError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)
+            ) from exc
+
+        dev_session = await create_session(
+            db,
+            user_id=auth.user_id,
+            project_id=str(proj.id),
+            title=body.title.strip(),
+            tool_source=(body.tool_source or "unknown").lower().strip() or "unknown",
+        )
+        if dev_session is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create session",
+            )
+
+        return StartSessionResponse(
+            session_id=str(dev_session.id),
+            project_id=str(proj.id),
+            project_slug=proj.slug,
+            project_name=proj.name,
+            project_created=proj_created,
+        )
+
+
+@router.get(
+    "/sessions/{session_id}/resume",
+    response_model=ResumePromptResponse,
+    summary="Generate a resume prompt for a session",
+    responses={404: {"description": "Session not found"}},
+)
+async def resume_session_endpoint(
+    session_id: str,
+    target_tool: str = Query(default="generic", description="claude, cursor, windsurf, or generic"),
+    auth: AuthContext = Depends(require_user),
+) -> ResumePromptResponse:
+    """Assemble an optimised 'continue here' prompt for the given session."""
+    async with get_db_session() as db:
+        dev_session = await get_session(db, session_id, auth.user_id)
+        if dev_session is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session '{session_id}' not found or not accessible",
+            )
+        blocks = await get_context_blocks(
+            db, session_id=session_id, user_id=auth.user_id, limit=200
+        )
+        project_name = dev_session.project.name if dev_session.project else "Unknown Project"
+        session_title = dev_session.title
+
+    prompt = _build_resume_prompt(
+        project_name=project_name,
+        session_title=session_title,
+        blocks=blocks or [],
+        target_tool=target_tool,
+        session_id=session_id,
+    )
+
+    return ResumePromptResponse(
+        session_id=session_id,
+        target_tool=target_tool,
+        block_count=len(blocks or []),
+        prompt=prompt,
+    )
+
+
 # ── Context Blocks ─────────────────────────────────────────────────────────────
 
 
@@ -178,7 +301,7 @@ async def list_blocks_endpoint(
     session_id: str,
     block_type: str | None = Query(default=None, description="Filter by block type"),
     limit: int = Query(default=100, ge=1, le=500),
-    auth: AuthContext = Depends(require_jwt_user),
+    auth: AuthContext = Depends(require_user),
 ) -> ContextBlockListResponse:
     """Retrieve context blocks for a session, ordered by priority then creation time."""
     async with get_db_session() as db:

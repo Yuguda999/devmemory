@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from devmemory.api.schemas import ProjectListResponse, ProjectResponse
-from devmemory.auth.middleware import AuthContext, require_jwt_user
+from devmemory.auth.middleware import AuthContext, require_user
 from devmemory.db.engine import get_db_session
 from devmemory.db.repository import list_projects
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
     summary="List all projects",
 )
 async def list_projects_endpoint(
-    auth: AuthContext = Depends(require_jwt_user),
+    auth: AuthContext = Depends(require_user),
 ) -> ProjectListResponse:
     """List all projects for the authenticated user.
 

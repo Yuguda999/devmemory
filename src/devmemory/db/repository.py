@@ -20,8 +20,8 @@ from devmemory.models import (
     User,
 )
 
-
 # ── User Operations ────────────────────────────────────────────
+
 
 async def create_user(
     session: AsyncSession,
@@ -61,9 +61,7 @@ async def create_user(
 
 async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
     """Find a user by email address."""
-    result = await session.execute(
-        select(User).where(User.email == email.lower().strip())
-    )
+    result = await session.execute(select(User).where(User.email == email.lower().strip()))
     return result.scalar_one_or_none()
 
 
@@ -79,14 +77,13 @@ async def get_user_with_subscription(session: AsyncSession, user_id: str) -> Use
     Use this when you need to access ``user.subscription`` outside the session.
     """
     result = await session.execute(
-        select(User)
-        .where(User.id == user_id)
-        .options(selectinload(User.subscription))
+        select(User).where(User.id == user_id).options(selectinload(User.subscription))
     )
     return result.scalar_one_or_none()
 
 
 # ── API Key Operations ─────────────────────────────────────────
+
 
 async def create_api_key_record(
     session: AsyncSession,
@@ -133,10 +130,12 @@ async def get_api_key_by_hash(session: AsyncSession, raw_key: str) -> ApiKey | N
 async def list_api_keys(session: AsyncSession, user_id: str) -> list[ApiKey]:
     """List all API keys for a user (non-revoked)."""
     result = await session.execute(
-        select(ApiKey).where(
+        select(ApiKey)
+        .where(
             ApiKey.user_id == user_id,
             ApiKey.revoked == False,  # noqa: E712
-        ).order_by(ApiKey.created_at.desc())
+        )
+        .order_by(ApiKey.created_at.desc())
     )
     return list(result.scalars().all())
 
@@ -144,9 +143,7 @@ async def list_api_keys(session: AsyncSession, user_id: str) -> list[ApiKey]:
 async def revoke_api_key(session: AsyncSession, key_id: str, user_id: str) -> bool:
     """Revoke an API key. Returns True if found and revoked."""
     result = await session.execute(
-        update(ApiKey)
-        .where(ApiKey.id == key_id, ApiKey.user_id == user_id)
-        .values(revoked=True)
+        update(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user_id).values(revoked=True)
     )
     return result.rowcount > 0
 
@@ -154,13 +151,12 @@ async def revoke_api_key(session: AsyncSession, key_id: str, user_id: str) -> bo
 async def touch_api_key(session: AsyncSession, key_id: str) -> None:
     """Update the last_used_at timestamp for an API key."""
     await session.execute(
-        update(ApiKey)
-        .where(ApiKey.id == key_id)
-        .values(last_used_at=datetime.now(timezone.utc))
+        update(ApiKey).where(ApiKey.id == key_id).values(last_used_at=datetime.now(timezone.utc))
     )
 
 
 # ── Project Operations ─────────────────────────────────────────
+
 
 async def get_or_create_project(
     session: AsyncSession,
@@ -205,19 +201,31 @@ async def get_or_create_project(
 async def list_projects(session: AsyncSession, user_id: str) -> list[Project]:
     """List all projects for a user."""
     result = await session.execute(
-        select(Project)
-        .where(Project.user_id == user_id)
-        .order_by(Project.updated_at.desc())
+        select(Project).where(Project.user_id == user_id).order_by(Project.updated_at.desc())
     )
     return list(result.scalars().all())
 
 
 async def get_project_by_id(
-    session: AsyncSession, project_id: str, user_id: str,
+    session: AsyncSession,
+    project_id: str,
+    user_id: str,
 ) -> Project | None:
     """Get a single project by ID, scoped to user."""
     result = await session.execute(
         select(Project).where(Project.id == project_id, Project.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_project_by_slug(
+    session: AsyncSession,
+    user_id: str,
+    slug: str,
+) -> Project | None:
+    """Get a single project by slug, scoped to user (read-only — never creates)."""
+    result = await session.execute(
+        select(Project).where(Project.user_id == user_id, Project.slug == slug)
     )
     return result.scalar_one_or_none()
 
@@ -262,7 +270,9 @@ async def create_session(
 
 
 async def get_session(
-    session: AsyncSession, session_id: str, user_id: str,
+    session: AsyncSession,
+    session_id: str,
+    user_id: str,
 ) -> Session | None:
     """Get a session by ID with context blocks eagerly loaded.
 
@@ -442,10 +452,7 @@ async def get_context_blocks(
     if block_type is not None:
         stmt = stmt.where(ContextBlock.block_type == block_type)
 
-    stmt = (
-        stmt.order_by(ContextBlock.priority.desc(), ContextBlock.created_at.asc())
-        .limit(limit)
-    )
+    stmt = stmt.order_by(ContextBlock.priority.desc(), ContextBlock.created_at.asc()).limit(limit)
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -484,7 +491,9 @@ async def update_context_block(
 
 
 async def delete_context_block(
-    session: AsyncSession, block_id: str, user_id: str,
+    session: AsyncSession,
+    block_id: str,
+    user_id: str,
 ) -> bool:
     """Delete a context block by ID.
 
@@ -509,7 +518,9 @@ async def delete_context_block(
 
 
 async def get_context_block_by_id(
-    session: AsyncSession, block_id: str, user_id: str,
+    session: AsyncSession,
+    block_id: str,
+    user_id: str,
 ) -> ContextBlock | None:
     """Get a context block by ID.
 
@@ -551,6 +562,7 @@ async def update_context_block_status(
 
 
 # ── Tool Connection Operations ─────────────────────────────────
+
 
 async def record_tool_connection(
     session: AsyncSession,
