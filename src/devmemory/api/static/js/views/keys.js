@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { fmtDate, fmtDateTime, spinner, emptyState, toast, copyText, icon } from '../utils.js';
+import { fmtDate, fmtDateTime, spinner, emptyState, toast, copyText, icon, confirmDialog } from '../utils.js';
 
 export async function renderKeys(container) {
   container.innerHTML = `
@@ -73,7 +73,13 @@ export async function renderKeys(container) {
   document.getElementById('keys-body').addEventListener('click', async e => {
     const btn = e.target.closest('[data-revoke-key]');
     if (!btn) return;
-    if (!confirm('Revoke this API key? This cannot be undone.')) return;
+    const ok = await confirmDialog({
+      title: 'Revoke API key?',
+      message: 'Any tool using this key will immediately lose access. This cannot be undone.',
+      confirmText: 'Revoke',
+      danger: true,
+    });
+    if (!ok) return;
     btn.disabled = true;
     btn.textContent = 'Revoking…';
     try {

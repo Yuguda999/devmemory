@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { fmtDate, fmtDateTime, statusBadge, blockChip, spinner, emptyState, toast, icon } from '../utils.js';
+import { fmtDate, fmtDateTime, statusBadge, blockChip, spinner, emptyState, toast, icon, confirmDialog } from '../utils.js';
 
 let _modal = null;
 
@@ -53,7 +53,13 @@ async function openSessionModal(session) {
       const btn = e.target.closest('[data-delete-block]');
       if (!btn) return;
       const id = btn.dataset.deleteBlock;
-      if (!confirm('Delete this context block?')) return;
+      const ok = await confirmDialog({
+        title: 'Delete context block?',
+        message: 'This permanently removes the block from the session.',
+        confirmText: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
       try {
         await api.delete(`/context-blocks/${id}`);
         btn.closest('.block-item').remove();

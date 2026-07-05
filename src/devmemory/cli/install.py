@@ -16,7 +16,6 @@ import json
 import os
 import platform
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,7 +58,7 @@ TOOLS: dict[str, ToolConfig] = {
             "Windows": "~/.claude.json",
         },
         has_hook=True,
-        notes="Wires Stop + PostToolUse hooks in ~/.claude/settings.json so context is auto-refreshed after every session and every file edit.",
+        notes="Registers the DevMemory MCP server. Claude Code reads its instructions and drives save/restore via the MCP tools — no CLAUDE.md file hooks.",
     ),
     "claude-desktop": ToolConfig(
         name="Claude Desktop",
@@ -293,73 +292,6 @@ def _add_windsurf_hook() -> Path:
     return path
 
 
-def _add_claude_code_hooks() -> Path:
-    """Wire DevMemory hooks into Claude Code's ~/.claude/settings.json.
-
-    Unlike MCP tools (which fire only when the AI decides), Claude Code hooks
-    fire at the **OS level** unconditionally:
-
-    * ``Stop``        — Fires every time Claude finishes a turn. Runs
-                        ``devmemory inject`` so CLAUDE.md is always refreshed
-                        for the next session — even if the AI forgets to save.
-    * ``PostToolUse`` — Fires after every Write or Edit tool call. Appends a
-                        reminder line to CLAUDE.md prompting the AI to call
-                        ``save_context`` before finishing.
-
-    Together these make DevMemory near-automatic for Claude Code users without
-    relying on the AI's judgment.
-    """
-    settings_path = Path.home() / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-
-    config: dict = {}
-    if settings_path.exists():
-        try:
-            config = json.loads(settings_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            config = {}
-
-    if "hooks" not in config:
-        config["hooks"] = {}
-
-    # ── Stop hook: refresh CLAUDE.md after every session end ──────────────────
-    stop_hooks = config["hooks"].get("Stop", [])
-    inject_cmd = "devmemory inject --tool claude 2>/dev/null || true"
-    already_has_stop = any(
-        "devmemory inject" in h.get("command", "")
-        for entry in stop_hooks
-        for h in entry.get("hooks", [])
-    )
-    if not already_has_stop:
-        stop_hooks.append({
-            "matcher": "",
-            "hooks": [{"type": "command", "command": inject_cmd}],
-        })
-    config["hooks"]["Stop"] = stop_hooks
-
-    # ── PostToolUse hook: nudge after every Write/Edit ─────────────────────────
-    post_hooks = config["hooks"].get("PostToolUse", [])
-    nudge_cmd = (
-        "echo '<!-- devmemory: a file was just edited — "
-        "call save_context to persist this change -->' "
-        ">> CLAUDE.md 2>/dev/null || true"
-    )
-    already_has_post = any(
-        "devmemory" in h.get("command", "")
-        for entry in post_hooks
-        for h in entry.get("hooks", [])
-    )
-    if not already_has_post:
-        post_hooks.append({
-            "matcher": "Write|Edit",
-            "hooks": [{"type": "command", "command": nudge_cmd}],
-        })
-    config["hooks"]["PostToolUse"] = post_hooks
-
-    settings_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    return settings_path
-
-
 def _add_windsurf_cascade_hook() -> Path:
     """Wire DevMemory into Windsurf's Cascade hooks.json.
 
@@ -429,115 +361,41 @@ def _add_kilo_hook() -> Path:
     return path
 
 
-_SHELL_HOOK_BASH = """
-# ── DevMemory: auto-inject context when entering a new git project ─────────────
-_devmemory_check() {
-  local git_root
-  git_root=$(git rev-parse --show-toplevel 2>/dev/null)
-  if [ -n "$git_root" ] && [ "$git_root" != "$_DEVMEMORY_LAST_ROOT" ]; then
-    export _DEVMEMORY_LAST_ROOT="$git_root"
-    devmemory inject 2>/dev/null &
-  fi
-}
-PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND; }_devmemory_check"
-# ─────────────────────────────────────────────────────────────────────────────
-"""
-
-_SHELL_HOOK_ZSH = """
-# ── DevMemory: auto-inject context when entering a new git project ─────────────
-_devmemory_check() {
-  local git_root
-  git_root=$(git rev-parse --show-toplevel 2>/dev/null)
-  if [[ -n "$git_root" && "$git_root" != "$_DEVMEMORY_LAST_ROOT" ]]; then
-    export _DEVMEMORY_LAST_ROOT="$git_root"
-    devmemory inject 2>/dev/null &
-  fi
-}
-autoload -Uz add-zsh-hook
-add-zsh-hook precmd _devmemory_check
-# ─────────────────────────────────────────────────────────────────────────────
-"""
-
-
-def _add_shell_rc_hook() -> list[Path]:
-    """Inject DevMemory auto-inject into ~/.bashrc and/or ~/.zshrc.
-
-    Uses PROMPT_COMMAND (bash) and precmd hook (zsh) to call
-    ``devmemory inject`` whenever the user enters a new git repo —
-    regardless of which AI tool they're using.  Runs in the background
-    so it never blocks the prompt.
-
-    Returns a list of RC files that were actually modified.
-    """
-    written: list[Path] = []
-    marker = "DevMemory: auto-inject"
-
-    for rc_file, hook_content in [
-        (Path.home() / ".bashrc", _SHELL_HOOK_BASH),
-        (Path.home() / ".zshrc", _SHELL_HOOK_ZSH),
-    ]:
-        if not rc_file.exists():
-            continue
-        existing = rc_file.read_text(encoding="utf-8")
-        if marker in existing:
-            continue  # Already installed
-        rc_file.write_text(existing.rstrip("\n") + "\n" + hook_content, encoding="utf-8")
-        written.append(rc_file)
-
-    return written
-
-
-def _install_git_hooks(cwd: str | None = None) -> list[Path]:
-    """Install post-checkout and post-merge git hooks in the given project.
-
-    These hooks fire at the OS/git level — no AI judgment needed — and call
-    ``devmemory inject`` after every ``git checkout`` or ``git pull/merge``.
-    Works with every AI tool (Cursor, Windsurf, Cline, Kilo, etc.).
-
-    Args:
-        cwd: Project directory. Defaults to current working directory.
-    """
-    import subprocess
-
-    cwd = cwd or os.getcwd()
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
-            cwd=cwd, capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode != 0:
-            return []
-        git_dir = Path(cwd) / result.stdout.strip()
-    except Exception:
-        return []
-
-    hooks_dir = git_dir / "hooks"
-    hooks_dir.mkdir(parents=True, exist_ok=True)
-
-    inject_script = "#!/bin/sh\ndevmemory inject 2>/dev/null || true\n"
-    written: list[Path] = []
-
-    for hook_name in ("post-checkout", "post-merge"):
-        hook_path = hooks_dir / hook_name
-        existing = hook_path.read_text(encoding="utf-8") if hook_path.exists() else ""
-        if "devmemory inject" in existing:
-            continue
-        if existing and not existing.startswith("#!"):
-            # Existing non-shell hook — skip to avoid breaking it
-            continue
-        if existing:
-            # Append to existing shell hook
-            hook_path.write_text(existing.rstrip("\n") + "\ndevmemory inject 2>/dev/null || true\n", encoding="utf-8")
-        else:
-            hook_path.write_text(inject_script, encoding="utf-8")
-        if platform.system() != "Windows":
-            hook_path.chmod(0o755)
-        written.append(hook_path)
-
-    return written
-
-
 # ── API Key Storage ────────────────────────────────────────────────────────────
+
+
+def ensure_global_env() -> Path | None:
+    """Write DevMemory's DB + deployment config to ``~/.devmemory/.env``.
+
+    This is the single source of truth read by BOTH the MCP server (which each
+    AI tool launches with *its own* working directory) and the REST/dashboard
+    server. Anchoring config to a fixed absolute path is what stops the MCP
+    server from silently falling back to a per-project SQLite file — the bug
+    where ``save_context`` looks like it worked but nothing reaches the
+    dashboard because the key only exists in the REST server's database.
+
+    Idempotent: if the file already defines ``DEVMEMORY_DATABASE_URL`` we leave
+    it untouched so a hand-edited config is never clobbered.
+    """
+    from devmemory.config import settings
+
+    env_path = Path.home() / ".devmemory" / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+    if "DEVMEMORY_DATABASE_URL" in existing:
+        return None  # already configured — respect it
+
+    block = (
+        "# DevMemory global runtime config (single source of truth) — written by\n"
+        "# `devmemory install`. Read by the MCP server (any working directory) and\n"
+        "# the REST/dashboard server so they always resolve the SAME database.\n"
+        f"DEVMEMORY_DEPLOYMENT_MODE={settings.deployment_mode.value}\n"
+        f"DEVMEMORY_DATABASE_URL={settings.database_url}\n"
+    )
+    sep = "" if not existing or existing.endswith("\n") else "\n"
+    env_path.write_text(existing + sep + block, encoding="utf-8")
+    return env_path
 
 
 def save_api_key(api_key: str) -> Path:
@@ -608,11 +466,17 @@ def install_tool(
     # Save API key globally
     key_path = save_api_key(api_key)
 
+    # Pin DB/deployment config to a fixed path so the MCP server (launched with
+    # each tool's own CWD) and the REST server always share one database.
+    global_env_path = ensure_global_env()
+
     lines = [
         f"✅ {tool.name}: DevMemory MCP installed",
         f"   Config: {config_path}",
         f"   API key saved: {key_path}",
     ]
+    if global_env_path:
+        lines.append(f"   Global runtime config: {global_env_path} (shared DB for MCP + dashboard)")
 
     if tool.has_hook and tool.slug == "augment":
         lines.append("   SessionStart hook: added (auto-inject on startup)")
@@ -631,10 +495,12 @@ def install_tool(
         lines.append(f"   Cascade post-hook: written to {cascade_path} (fires after every agent message).")
 
     if tool.has_hook and tool.slug == "claude-code":
-        hook_path = _add_claude_code_hooks()
-        lines.append(f"   OS-level hooks: written to {hook_path}")
-        lines.append("   Stop hook: refreshes CLAUDE.md after every session (unconditional, not AI-driven).")
-        lines.append("   PostToolUse hook: nudges save_context after every Write/Edit.")
+        # No OS-level hooks. Claude Code reads the MCP server's `instructions`
+        # (see devmemory.tools) and the MCP tools (save_context / get_context)
+        # are the intended flow. We deliberately do NOT wire Stop/PostToolUse
+        # hooks: the old ones appended to ./CLAUDE.md on every edit (unbounded
+        # spam) and overwrote the whole file on Stop (clobbering real content).
+        lines.append("   MCP tools drive save/restore — no CLAUDE.md file hooks installed.")
 
     if tool.has_hook and tool.slug == "cline":
         cline_path = _add_cline_hook()
@@ -643,18 +509,6 @@ def install_tool(
     if tool.has_hook and tool.slug == "kilo":
         kilo_path = _add_kilo_hook()
         lines.append(f"   Global .kilocoderules: written to {kilo_path} (auto-read every session).")
-
-    # Universal: shell RC hook (works for ALL tools regardless of native support)
-    rc_files = _add_shell_rc_hook()
-    if rc_files:
-        for rc in rc_files:
-            lines.append(f"   Shell hook: added to {rc} (auto-injects on git repo entry for any tool).")
-        lines.append("   Run: source ~/.bashrc  (or restart your terminal) to activate.")
-
-    # Universal: git hooks for project-level automation
-    git_hook_paths = _install_git_hooks()
-    if git_hook_paths:
-        lines.append(f"   Git hooks: installed post-checkout + post-merge in {git_hook_paths[0].parent}")
 
     if tool.notes:
         lines.append(f"   💡 {tool.notes}")

@@ -93,14 +93,109 @@ export function emptyState(iconName, title, desc = '') {
   </div>`;
 }
 
-/** Copy text to clipboard */
+/** Copy text to the clipboard.
+ *
+ * navigator.clipboard is only available in secure contexts (HTTPS or
+ * localhost). When the dashboard is served over plain HTTP on a LAN IP or
+ * 0.0.0.0, it is undefined — so we fall back to a temporary <textarea> +
+ * execCommand('copy'), which works in insecure contexts.
+ */
 export async function copyText(text, btn) {
-  try {
-    await navigator.clipboard.writeText(text);
-    const orig = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = orig, 1800);
-  } catch {
-    toast('Could not copy to clipboard', 'error');
+  const ok = await writeClipboard(text);
+  if (ok) {
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = orig, 1800);
+    } else {
+      toast('Copied to clipboard');
+    }
+  } else {
+    toast('Could not copy — select the text and copy manually', 'error');
   }
+}
+
+async function writeClipboard(text) {
+  // Preferred path: async Clipboard API (secure contexts only).
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch { /* fall through to legacy path */ }
+  }
+  // Legacy fallback for insecure contexts (http:// on a LAN IP).
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Styled confirmation dialog — a themed replacement for window.confirm().
+ * Returns a Promise that resolves to true (confirmed) or false (cancelled).
+ *
+ * @param {object} opts
+ * @param {string} opts.title        - Dialog heading.
+ * @param {string} [opts.message]    - Body text.
+ * @param {string} [opts.confirmText] - Confirm button label (default "Confirm").
+ * @param {string} [opts.cancelText]  - Cancel button label (default "Cancel").
+ * @param {boolean} [opts.danger]     - Style the confirm button as destructive.
+ * @param {string} [opts.icon]        - Lucide icon name shown beside the title.
+ */
+export function confirmDialog(opts = {}) {
+  const {
+    title = 'Are you sure?',
+    message = '',
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
+    danger = false,
+    icon: iconName = danger ? 'alert-triangle' : 'help-circle',
+  } = opts;
+
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'confirm-backdrop';
+    backdrop.innerHTML = `
+      <div class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+        <div class="confirm-icon ${danger ? 'danger' : ''}">${icon(iconName, 22)}</div>
+        <div class="confirm-title" id="confirm-title">${title}</div>
+        ${message ? `<div class="confirm-message">${message}</div>` : ''}
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" id="confirm-cancel">${cancelText}</button>
+          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="confirm-ok">${confirmText}</button>
+        </div>
+      </div>
+    `;
+
+    function close(result) {
+      document.removeEventListener('keydown', onKey);
+      backdrop.classList.add('closing');
+      setTimeout(() => backdrop.remove(), 120);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') close(false);
+      else if (e.key === 'Enter') close(true);
+    }
+
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(false); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(backdrop);
+    backdrop.querySelector('#confirm-cancel').addEventListener('click', () => close(false));
+    backdrop.querySelector('#confirm-ok').addEventListener('click', () => close(true));
+    // Focus the confirm button so Enter/Space works immediately.
+    backdrop.querySelector('#confirm-ok').focus();
+  });
 }

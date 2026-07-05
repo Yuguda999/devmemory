@@ -58,15 +58,18 @@ async function req(method, path, body) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401) {
-    // Token expired — clear and redirect to login
-    logout();
-    return;
-  }
-
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { detail: text }; }
+
+  // A 401 on an authenticated request means the session token expired — clear it
+  // and bounce to login. But a 401 from the auth endpoints themselves is just
+  // bad credentials; let it propagate so the login form can show the error.
+  const isAuthEndpoint = path.startsWith('/auth/login') || path.startsWith('/auth/register');
+  if (res.status === 401 && state.token && !isAuthEndpoint) {
+    logout();
+    return;
+  }
 
   if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
   return data;

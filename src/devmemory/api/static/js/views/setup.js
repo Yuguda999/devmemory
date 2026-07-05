@@ -1,5 +1,5 @@
 import { api, state } from '../api.js';
-import { icon, toast, spinner } from '../utils.js';
+import { icon, toast, spinner, copyText } from '../utils.js';
 
 // ── Tool definitions — icons served from /static/icons/ ──────────────────────
 
@@ -139,7 +139,9 @@ function mcpJsonSnippet(apiKey) {
 }
 
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard')).catch(() => {});
+  // Delegates to the shared helper, which falls back to execCommand on
+  // insecure origins (http:// on a LAN IP) where navigator.clipboard is absent.
+  copyText(text);
 }
 
 function escHtml(s) {

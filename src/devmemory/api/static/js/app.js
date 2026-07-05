@@ -1,5 +1,5 @@
 import { detectMode, isLoggedIn, logout, state } from './api.js';
-import { icon } from './utils.js';
+import { icon, confirmDialog } from './utils.js';
 import { renderLogin }     from './views/login.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderProjects }  from './views/projects.js';
@@ -57,8 +57,14 @@ function buildSidebar() {
   document.querySelectorAll('.nav-link[data-route]').forEach(btn => {
     btn.addEventListener('click', () => { window.location.hash = btn.dataset.route; });
   });
-  document.getElementById('btn-logout')?.addEventListener('click', () => {
-    if (confirm('Sign out?')) logout();
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: 'Sign out?',
+      message: 'You will need to sign in again to access your dashboard.',
+      confirmText: 'Sign Out',
+      danger: true,
+    });
+    if (ok) logout();
   });
 }
 
