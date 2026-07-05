@@ -29,14 +29,28 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         connect_args = {}
+        engine_kwargs = {"echo": settings.log_level == "DEBUG"}
+
         if settings.database_is_sqlite:
             # SQLite requires this for async + concurrent writes
             connect_args["check_same_thread"] = False
+        else:
+            # Managed/serverless Postgres (Neon) closes idle connections when the
+            # compute suspends or the pooler recycles them. Without this the pool
+            # hands out a dead connection → "asyncpg InterfaceError: connection
+            # is closed". pre_ping validates (and transparently replaces) a
+            # connection before use; recycle drops aged ones proactively.
+            engine_kwargs["pool_pre_ping"] = True
+            engine_kwargs["pool_recycle"] = 300
+            if settings.database_url.startswith("postgresql+asyncpg://"):
+                # Keep asyncpg compatible with pgbouncer transaction pooling
+                # (Neon's pooled endpoint) by not caching prepared statements.
+                connect_args["statement_cache_size"] = 0
 
         _engine = create_async_engine(
             settings.database_url,
-            echo=(settings.log_level == "DEBUG"),
             connect_args=connect_args,
+            **engine_kwargs,
         )
     return _engine
 
