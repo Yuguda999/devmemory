@@ -121,6 +121,14 @@ class Settings(BaseSettings):
                     anchored = (Path.home() / ".devmemory" / rel).expanduser()
                     anchored.parent.mkdir(parents=True, exist_ok=True)
                     return f"{prefix}{anchored}"
+        # Force the async driver. Managed providers (Neon, Supabase, Heroku)
+        # hand out `postgresql://` or `postgres://`, which SQLAlchemy maps to the
+        # sync psycopg2 driver (not installed) — so paste-as-is would crash. We
+        # only ship asyncpg, so rewrite any bare/psycopg2 Postgres scheme to it.
+        for bare in ("postgresql+psycopg2://", "postgresql://", "postgres://"):
+            if value.startswith(bare):
+                value = "postgresql+asyncpg://" + value[len(bare) :]
+                break
         if value.startswith("postgresql+asyncpg://"):
             return _normalize_asyncpg_url(value)
         return value
