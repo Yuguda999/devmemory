@@ -38,6 +38,12 @@ devmemory          # starts MCP server (stdio, for AI tools)
 devmemory --rest   # starts REST API (HTTP, for dashboards)
 ```
 
+> **Prefer Node? No Python required.** Connect any tool via npm:
+> ```bash
+> npx -y @commanderzero/devmemory install --tool cursor --api-key dm_key_YOUR_KEY --host https://your-backend
+> ```
+> Same tools, same backend — it just runs the MCP client on Node instead.
+
 > **Install it for real — don't rely on `uvx` in MCP configs.** AI tools
 > launch the MCP server with their own environment, not your shell's PATH. A bare
 > `devmemory` (or `uvx`) only resolves if it happens to be on that PATH, which

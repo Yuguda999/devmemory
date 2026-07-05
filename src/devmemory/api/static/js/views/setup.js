@@ -194,7 +194,7 @@ export async function renderSetup(container) {
                 <code>pip install devmemory-ai</code>
                 <button class="code-copy-btn" data-copy="pip install devmemory-ai">${icon('copy', 13)}</button>
               </div>
-              <div class="step-alt">Also: <code>uv tool install devmemory-ai</code> &nbsp;·&nbsp; <code>pipx install devmemory-ai</code> &nbsp;·&nbsp; installs the <code>devmemory</code> command</div>
+              <div class="step-alt"><strong>Prefer Node?</strong> Nothing to install — use <code>npx -y @commanderzero/devmemory</code> in step 3. &nbsp;·&nbsp; Python alts: <code>uv tool install devmemory-ai</code>, <code>pipx install devmemory-ai</code></div>
             </div>
           </div>
 
@@ -222,6 +222,11 @@ export async function renderSetup(container) {
               <div class="step-code">
                 <code>devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
                 <button class="code-copy-btn" data-copy="devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
+              </div>
+              <div class="step-alt">…or with Node — no Python needed:</div>
+              <div class="step-code">
+                <code>npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
+                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
               </div>
               <div class="step-alt">Use <code>--tool all</code> to configure every detected tool at once. <code>--host</code> points the client at this server.</div>
             </div>
@@ -383,6 +388,7 @@ function showToolDetail(slug, apiKey) {
   const snippet = isToml ? tomlSnippet(apiKey) : mcpJsonSnippet(apiKey);
   const configLabel = isToml ? 'TOML Configuration (~/.codex/config.toml)' : 'JSON Configuration';
   const cliInstall = `devmemory install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
+  const npxInstall = `npx -y @commanderzero/devmemory install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
 
   const configRows = Object.entries(t.configs).map(([os, path]) => `
     <div class="config-path-row">
@@ -411,6 +417,14 @@ function showToolDetail(slug, apiKey) {
         <div class="step-code lg">
           <code>${escHtml(cliInstall)}</code>
           <button class="code-copy-btn" data-copy="${escHtml(cliInstall)}">${icon('copy', 13)}</button>
+        </div>
+        <div class="detail-method-label" style="margin-top:12px">
+          <span class="method-badge">Node / npx</span>
+          No Python required
+        </div>
+        <div class="step-code lg">
+          <code>${escHtml(npxInstall)}</code>
+          <button class="code-copy-btn" data-copy="${escHtml(npxInstall)}">${icon('copy', 13)}</button>
         </div>
       </div>
 
