@@ -24,18 +24,19 @@ Recommended free stack: **Neon** (Postgres) + **Render** (Docker web service). $
 ## Step 1 — Create the database (Neon)
 
 1. Neon console → **Create project** (pick a region near your users).
-2. Open **Connection Details** → copy the **pooled** connection string. It looks like:
+2. Open **Connection Details** → copy the connection string. **Paste it verbatim** —
+   no editing needed:
    ```
-   postgresql://USER:PASSWORD@ep-xxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require
+   postgresql://USER:PASSWORD@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require
    ```
-3. **Change the driver scheme** `postgresql://` → `postgresql+asyncpg://` (DevMemory
-   uses the async driver). Keep everything else, including `?sslmode=require`:
-   ```
-   postgresql+asyncpg://USER:PASSWORD@ep-xxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require
-   ```
-   > `sslmode=require` is auto-translated to asyncpg's `ssl=require` at startup —
-   > you don't need to change it. Use the **pooled** host (`...-pooler...`) so
-   > Render's scale-to-zero doesn't exhaust connections.
+   > DevMemory rewrites `postgresql://` → `postgresql+asyncpg://` and
+   > `sslmode=require` → asyncpg's `ssl=require` automatically at startup, so the
+   > raw Neon string works as-is.
+   >
+   > Prefer the **Direct connection** string (not the `-pooler` one). asyncpg's
+   > prepared statements don't play well with Neon's pgbouncer pooler; if you must
+   > use the pooled host and hit `prepared statement ... already exists`, append
+   > `&prepared_statement_cache_size=0`.
 
 Keep this string for Step 2.
 
