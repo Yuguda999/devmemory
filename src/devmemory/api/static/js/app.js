@@ -71,9 +71,34 @@ function buildSidebar() {
 // Expose buildSidebar for login.js to call after successful login
 window.__buildSidebar = buildSidebar;
 
+/** Create the mobile hamburger + backdrop once, and wire the drawer toggle. */
+function ensureMobileChrome() {
+  if (document.getElementById('menu-toggle')) return;
+  const btn = document.createElement('button');
+  btn.id = 'menu-toggle';
+  btn.className = 'menu-toggle';
+  btn.setAttribute('aria-label', 'Toggle navigation');
+  btn.innerHTML = icon('menu', 20);
+  const backdrop = document.createElement('div');
+  backdrop.id = 'sidebar-backdrop';
+  backdrop.className = 'sidebar-backdrop';
+  document.body.append(btn, backdrop);
+
+  const sidebar = document.getElementById('sidebar');
+  btn.addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    backdrop.classList.toggle('show', open);
+  });
+  backdrop.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    backdrop.classList.remove('show');
+  });
+}
+
 async function init() {
   await detectMode();
   buildSidebar();
+  ensureMobileChrome();
 
   // Route on hash change
   window.addEventListener('hashchange', route);
@@ -113,6 +138,12 @@ function route() {
     main.style.display = '';
     target.render(main, params);
   }
+
+  // Mobile drawer: close on every navigation; hide the hamburger on login.
+  sidebar.classList.remove('open');
+  document.getElementById('sidebar-backdrop')?.classList.remove('show');
+  const menuToggle = document.getElementById('menu-toggle');
+  if (menuToggle) menuToggle.style.display = (hash === '#login') ? 'none' : '';
 }
 
 init();
