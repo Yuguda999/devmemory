@@ -29,7 +29,9 @@ from devmemory.resolver.git_resolver import resolve_project_slug
 # ── Configuration ───────────────────────────────────────────────────────────────
 
 _DEFAULT_HOST = "http://localhost:8765"
-_TIMEOUT = 15.0
+# Generous timeout: managed free tiers (Render/Fly) cold-start ~30-50s when idle,
+# so the first tool call after a lull must wait rather than fail.
+_TIMEOUT = 60.0
 
 
 def _host() -> str:
