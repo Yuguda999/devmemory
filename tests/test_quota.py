@@ -61,9 +61,9 @@ def _mock_db_multi(tier: str, *counts: int) -> AsyncMock:
 
 def test_quota_for_free():
     q = _quota_for(SubscriptionTier.FREE.value)
-    assert q.max_projects == 3
-    assert q.max_sessions_per_project == 10
-    assert q.max_blocks_per_session == 500
+    assert q.max_projects == 1000
+    assert q.max_sessions_per_project == 1000
+    assert q.max_blocks_per_session == 100_000
 
 
 def test_quota_for_pro():
@@ -92,27 +92,27 @@ def test_quota_for_unknown_tier_falls_back_to_free():
 async def test_check_project_quota_under_limit():
     """Should pass silently when project count is below the tier limit."""
     db = _mock_db(scalar_return=2, tier=SubscriptionTier.FREE.value)
-    # 2 < 3 (free limit) — no exception expected
+    # 2 < 1000 (free limit) — no exception expected
     await check_project_quota(db, user_id="user-1")
 
 
 @pytest.mark.asyncio
 async def test_check_project_quota_at_limit_raises():
     """Should raise when project count equals the tier limit."""
-    db = _mock_db(scalar_return=3, tier=SubscriptionTier.FREE.value)
+    db = _mock_db(scalar_return=1000, tier=SubscriptionTier.FREE.value)
     with pytest.raises(QuotaExceededError) as exc_info:
         await check_project_quota(db, user_id="user-1")
 
     err = exc_info.value
     assert err.tier == SubscriptionTier.FREE.value
-    assert err.limit == 3
-    assert err.current == 3
+    assert err.limit == 1000
+    assert err.current == 1000
     assert "Upgrade" in str(err)
 
 
 @pytest.mark.asyncio
 async def test_check_project_quota_over_limit_raises():
-    db = _mock_db(scalar_return=5, tier=SubscriptionTier.FREE.value)
+    db = _mock_db(scalar_return=1001, tier=SubscriptionTier.FREE.value)
     with pytest.raises(QuotaExceededError):
         await check_project_quota(db, user_id="user-1")
 
@@ -133,13 +133,13 @@ async def test_check_project_quota_team_never_raises():
 @pytest.mark.asyncio
 async def test_check_project_quota_missing_subscription_defaults_to_free():
     """If no subscription row exists, default to FREE limits."""
-    db = _mock_db(scalar_return=3, tier=None)  # scalar_one_or_none → None
+    db = _mock_db(scalar_return=1000, tier=None)  # scalar_one_or_none → None
 
     # Patch _get_tier directly to return FREE when subscription is None
     tier_result = MagicMock()
     tier_result.scalar_one_or_none.return_value = None
     count_result = MagicMock()
-    count_result.scalar_one.return_value = 3
+    count_result.scalar_one.return_value = 1000
     db.execute.side_effect = [tier_result, count_result]
 
     with pytest.raises(QuotaExceededError) as exc_info:
@@ -158,13 +158,13 @@ async def test_check_session_quota_under_limit():
 
 @pytest.mark.asyncio
 async def test_check_session_quota_at_limit_raises():
-    db = _mock_db(scalar_return=10, tier=SubscriptionTier.FREE.value)
+    db = _mock_db(scalar_return=1000, tier=SubscriptionTier.FREE.value)
     with pytest.raises(QuotaExceededError) as exc_info:
         await check_session_quota(db, user_id="user-1", project_id="proj-a")
 
     err = exc_info.value
-    assert err.limit == 10
-    assert err.current == 10
+    assert err.limit == 1000
+    assert err.current == 1000
 
 
 @pytest.mark.asyncio
@@ -191,10 +191,10 @@ async def test_check_block_quota_under_limit():
 
 @pytest.mark.asyncio
 async def test_check_block_quota_at_limit_raises():
-    db = _mock_db(scalar_return=500, tier=SubscriptionTier.FREE.value)
+    db = _mock_db(scalar_return=100_000, tier=SubscriptionTier.FREE.value)
     with pytest.raises(QuotaExceededError) as exc_info:
         await check_block_quota(db, user_id="user-1", session_id="sess-x")
-    assert exc_info.value.limit == 500
+    assert exc_info.value.limit == 100_000
 
 
 @pytest.mark.asyncio
@@ -233,9 +233,9 @@ async def test_get_usage_summary_free_tier():
     summary = await get_usage_summary(db, user_id="user-1")
 
     assert summary["tier"] == SubscriptionTier.FREE.value
-    assert summary["limits"]["max_projects"] == 3
-    assert summary["limits"]["max_sessions_per_project"] == 10
-    assert summary["limits"]["max_blocks_per_session"] == 500
+    assert summary["limits"]["max_projects"] == 1000
+    assert summary["limits"]["max_sessions_per_project"] == 1000
+    assert summary["limits"]["max_blocks_per_session"] == 100_000
     assert summary["usage"]["projects"] == 2
     assert summary["usage"]["total_sessions"] == 7
 
