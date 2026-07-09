@@ -125,6 +125,71 @@ On Windows you can alternatively wrap with cmd: `"command": "cmd", "args": ["/c"
 - 🌐 **Cross-Platform** — Works on Windows, macOS, and Linux
 - 📊 **Web Dashboard** — Monitor sessions, projects, and context at `http://localhost:8765`
 - ⚡ **Auto-Sync** — SessionStart hooks and inject commands for zero-friction tool switching
+- 🤖 **Deterministic Auto-Save** — saves your work with **no reliance on the model** calling a tool (see below)
+
+---
+
+## Auto-Save — how context actually gets saved
+
+The whole point of DevMemory is that when your credits run out **mid-work**, the
+next tool can continue. That only works if your context was saved *before* the
+credits died — so saving must not depend on the AI remembering to do it.
+
+DevMemory saves deterministically, two ways:
+
+1. **Claude Code — Stop hook.** `install --tool claude-code` wires an OS-level
+   `SessionStart` + `Stop` hook. Every turn is snapshotted from the transcript
+   automatically. No `save_context` call needed. Restores on the next session.
+
+2. **Tools without a transcript hook (Cursor, Cline, Kilo, Codex) — the watch daemon.**
+   These tools don't hand a transcript to a shell hook, but they *do* persist
+   conversations locally. `devmemory watch` is a background daemon that tails
+   those stores and pushes new turns to DevMemory — again, with zero model
+   cooperation. `install` sets it up as a systemd/launchd service automatically.
+
+Check what's supported and detected on your machine:
+
+```bash
+devmemory watch --list
+```
+
+### Tool support matrix
+
+| Tool | Auto-save mechanism | Status |
+|---|---|---|
+| **Claude Code** | `Stop` hook (reads transcript) | ✅ deterministic |
+| **Cursor** | `watch` daemon (SQLite store) | ✅ verified |
+| **Cline / Kilo** | `watch` daemon (JSON task history) | ✅ supported |
+| **Codex** | `watch` daemon (`state_*.sqlite` + rollout JSONL) | ✅ supported |
+| _any JSONL tool_ | `watch` generic adapter (`~/.devmemory/watch_adapters.json`) | ✅ config-driven |
+| **Windsurf** | restore via hook; auto-save pending | ⏳ pending |
+| **Antigravity** | conversations are opaque protobuf — not parseable yet | ❌ unsupported |
+
+> DevMemory does **not** fake support. Tools it can't yet auto-save are listed
+> honestly above and by `watch --list`, rather than shipped as adapters that
+> silently capture nothing.
+
+### Adding an unlisted tool (generic adapter)
+
+If your tool logs conversations as JSONL, add it without code —
+`~/.devmemory/watch_adapters.json`:
+
+```json
+{
+  "adapters": [
+    {
+      "name": "my-tool",
+      "glob": "~/.mytool/sessions/**/*.jsonl",
+      "role_field": "role",
+      "text_field": "content",
+      "user_values": ["user"],
+      "assistant_values": ["assistant", "model"]
+    }
+  ]
+}
+```
+
+`role_field`/`text_field` accept dotted paths (e.g. `payload.role`).
 
 ---
 
@@ -167,6 +232,9 @@ generate_resume_prompt(session_id="...", target_tool="claude")
 | `devmemory install --tool <name> --api-key <key>` | One-time setup for an AI tool |
 | `devmemory install --all --api-key <key>` | Setup for all detected tools |
 | `devmemory inject [--cwd PATH]` | Auto-load context into CLAUDE.md, .augment/rules/ |
+| `devmemory watch` | Background daemon: auto-save Cursor/Cline/Kilo/Codex conversations |
+| `devmemory watch --list` | Show per-tool auto-save support + which stores are present |
+| `devmemory watch --install-service` | Install watch as a systemd/launchd background service |
 
 ---
 

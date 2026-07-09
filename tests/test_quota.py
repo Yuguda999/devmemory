@@ -61,9 +61,9 @@ def _mock_db_multi(tier: str, *counts: int) -> AsyncMock:
 
 def test_quota_for_free():
     q = _quota_for(SubscriptionTier.FREE.value)
-    assert q.max_projects == 1000
-    assert q.max_sessions_per_project == 1000
-    assert q.max_blocks_per_session == 100_000
+    assert q.max_projects == 10
+    assert q.max_sessions_per_project == 30
+    assert q.max_blocks_per_session == 1500
 
 
 def test_quota_for_pro():
@@ -105,7 +105,7 @@ async def test_check_project_quota_at_limit_raises():
 
     err = exc_info.value
     assert err.tier == SubscriptionTier.FREE.value
-    assert err.limit == 1000
+    assert err.limit == 10
     assert err.current == 1000
     assert "Upgrade" in str(err)
 
@@ -163,7 +163,7 @@ async def test_check_session_quota_at_limit_raises():
         await check_session_quota(db, user_id="user-1", project_id="proj-a")
 
     err = exc_info.value
-    assert err.limit == 1000
+    assert err.limit == 30
     assert err.current == 1000
 
 
@@ -194,7 +194,7 @@ async def test_check_block_quota_at_limit_raises():
     db = _mock_db(scalar_return=100_000, tier=SubscriptionTier.FREE.value)
     with pytest.raises(QuotaExceededError) as exc_info:
         await check_block_quota(db, user_id="user-1", session_id="sess-x")
-    assert exc_info.value.limit == 100_000
+    assert exc_info.value.limit == 1500
 
 
 @pytest.mark.asyncio
@@ -233,9 +233,9 @@ async def test_get_usage_summary_free_tier():
     summary = await get_usage_summary(db, user_id="user-1")
 
     assert summary["tier"] == SubscriptionTier.FREE.value
-    assert summary["limits"]["max_projects"] == 1000
-    assert summary["limits"]["max_sessions_per_project"] == 1000
-    assert summary["limits"]["max_blocks_per_session"] == 100_000
+    assert summary["limits"]["max_projects"] == 10
+    assert summary["limits"]["max_sessions_per_project"] == 30
+    assert summary["limits"]["max_blocks_per_session"] == 1500
     assert summary["usage"]["projects"] == 2
     assert summary["usage"]["total_sessions"] == 7
 

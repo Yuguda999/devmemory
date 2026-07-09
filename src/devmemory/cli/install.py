@@ -361,6 +361,100 @@ def _add_kilo_hook() -> Path:
     return path
 
 
+# ── Claude Code hooks (OS-level, no AI judgment) ────────────────────────────────
+
+_CLAUDE_HOOK_FILES = ("_common.py", "session_start.py", "stop_save.py")
+
+# Tools without a per-turn transcript hook — they need the watch daemon.
+_WATCH_TOOLS = {"cursor", "cline", "kilo"}
+
+
+def _package_hooks_dir() -> Path:
+    """Directory holding the shipped hook scripts (src/devmemory/hooks)."""
+    return Path(__file__).resolve().parent.parent / "hooks"
+
+
+def _copy_claude_hooks() -> Path:
+    """Copy the shipped hook scripts into ~/.devmemory/hooks/ and return the dir.
+
+    Always overwrites so an upgrade picks up fixes (e.g. the turn-aggregation
+    fix in stop_save.py). Scripts are stdlib-only and run under the tool's own
+    ``python3``, so they don't depend on the installed devmemory package.
+    """
+    src = _package_hooks_dir()
+    dst = Path.home() / ".devmemory" / "hooks"
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in _CLAUDE_HOOK_FILES:
+        s = src / name
+        if s.exists():
+            shutil.copyfile(s, dst / name)
+    return dst
+
+
+def _add_claude_code_hooks(hooks_dir: Path) -> Path:
+    """Merge DevMemory SessionStart + Stop hooks into ~/.claude/settings.json.
+
+    Idempotent and non-destructive: preserves any existing hooks (other tools',
+    user's own) and only adds a DevMemory command if one isn't already present.
+
+    - SessionStart → session_start.py injects restored context on startup.
+    - Stop         → stop_save.py snapshots each turn (runs regardless of whether
+                     the model called save_context, so nothing is ever lost).
+    """
+    settings_path = Path.home() / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config: dict = {}
+    if settings_path.exists():
+        try:
+            config = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            config = {}
+
+    hooks = config.setdefault("hooks", {})
+
+    def _already(event: str, marker: str) -> bool:
+        for group in hooks.get(event, []):
+            if not isinstance(group, dict):
+                continue
+            for h in group.get("hooks", []):
+                if marker in (h.get("command") or ""):
+                    return True
+        return False
+
+    if not _already("SessionStart", "session_start.py"):
+        hooks.setdefault("SessionStart", []).append(
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'python3 "{hooks_dir / "session_start.py"}"',
+                        "timeout": 15,
+                        "statusMessage": "DevMemory: restoring context",
+                    }
+                ]
+            }
+        )
+
+    if not _already("Stop", "stop_save.py"):
+        hooks.setdefault("Stop", []).append(
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'python3 "{hooks_dir / "stop_save.py"}"',
+                        "timeout": 20,
+                        "async": True,
+                        "statusMessage": "DevMemory: saving turn",
+                    }
+                ]
+            }
+        )
+
+    settings_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return settings_path
+
+
 # ── API Key Storage ────────────────────────────────────────────────────────────
 
 
@@ -497,12 +591,18 @@ def install_tool(
         )
 
     if tool.has_hook and tool.slug == "claude-code":
-        # No OS-level hooks. Claude Code reads the MCP server's `instructions`
-        # (see devmemory.tools) and the MCP tools (save_context / get_context)
-        # are the intended flow. We deliberately do NOT wire Stop/PostToolUse
-        # hooks: the old ones appended to ./CLAUDE.md on every edit (unbounded
-        # spam) and overwrote the whole file on Stop (clobbering real content).
-        lines.append("   MCP tools drive save/restore — no CLAUDE.md file hooks installed.")
+        # OS-level hooks (no AI judgment) drive save/restore. These do NOT touch
+        # CLAUDE.md — the old CLAUDE.md hooks spammed the file on every edit and
+        # clobbered it on Stop. Instead: SessionStart injects context via
+        # hookSpecificOutput.additionalContext, and Stop POSTs each turn to the
+        # API so nothing is lost even when the model never calls save_context.
+        hooks_dir = _copy_claude_hooks()
+        settings_path = _add_claude_code_hooks(hooks_dir)
+        lines.append(f"   Hook scripts: {hooks_dir}")
+        lines.append(f"   SessionStart + Stop hooks: wired into {settings_path}")
+        lines.append(
+            "   Context saves/restores automatically every turn — no manual save_context needed."
+        )
 
     if tool.has_hook and tool.slug == "cline":
         cline_path = _add_cline_hook()
@@ -511,6 +611,15 @@ def install_tool(
     if tool.has_hook and tool.slug == "kilo":
         kilo_path = _add_kilo_hook()
         lines.append(f"   Global .kilocoderules: written to {kilo_path} (auto-read every session).")
+
+    # Tools with no per-turn transcript hook rely on the watch daemon to
+    # auto-save. Installing it once starts a background service that covers
+    # every supported local store (Cursor/Cline/Kilo/Codex + generic).
+    if tool.slug in _WATCH_TOOLS:
+        from devmemory.watch.service import install_service
+
+        ok, msg = install_service(host=host)
+        lines.append(f"   Auto-save daemon: {msg}" if ok else f"   ⚠️  watch service: {msg}")
 
     if tool.notes:
         lines.append(f"   💡 {tool.notes}")

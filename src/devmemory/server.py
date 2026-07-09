@@ -123,6 +123,38 @@ def run() -> None:
         help="DevMemory REST server URL (default: http://localhost:8765)",
     )
 
+    # ── devmemory watch ────────────────────────────────────────────────────
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="Background daemon: auto-save Cursor/Cline/Kilo conversations",
+        description=(
+            "Tail local conversation stores of tools that don't pass a transcript "
+            "to a hook (Cursor, Cline, Kilo) and push new turns to DevMemory, so "
+            "context is saved without the model calling save_context."
+        ),
+    )
+    watch_parser.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        help="Seconds between polls (default: 30)",
+    )
+    watch_parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run a single poll and exit (useful for testing / cron)",
+    )
+    watch_parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Show per-tool support status and which stores are present, then exit",
+    )
+    watch_parser.add_argument(
+        "--install-service",
+        action="store_true",
+        help="Install + start watch as a background service (systemd/launchd), then exit",
+    )
+
     # ── Legacy flags (no subcommand = MCP or REST) ─────────────────────────
     parser.add_argument(
         "--rest",
@@ -151,6 +183,27 @@ def run() -> None:
         from devmemory.cli.inject import run_inject
 
         run_inject(args)
+    elif args.command == "watch":
+        import sys as _sys
+
+        if args.list:
+            from devmemory.watch.capabilities import render_status
+
+            print(render_status())
+            _sys.exit(0)
+
+        if args.install_service:
+            import os as _os
+
+            from devmemory.watch.service import install_service
+
+            ok, msg = install_service(host=_os.environ.get("DEVMEMORY_HOST"))
+            print(("✅ " if ok else "❌ ") + msg)
+            _sys.exit(0 if ok else 1)
+
+        from devmemory.watch.daemon import run as run_watch
+
+        _sys.exit(run_watch(interval=args.interval, once=args.once))
     elif args.rest:
         run_rest(host=args.host, port=args.port)
     else:
