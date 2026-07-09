@@ -110,7 +110,7 @@ TOOLS: dict[str, ToolConfig] = {
             "Windows": "~/.gemini/antigravity/mcp_config.json",
         },
         has_hook=True,
-        notes="Wires PostInvocation + Stop agent hooks (~/.gemini/antigravity-cli/hooks.json) for deterministic auto-save.",
+        notes="MCP tools + ~/.gemini/GEMINI.md global rules drive save/restore (no verified per-turn IDE hook).",
     ),
     "cline": ToolConfig(
         name="Cline (VS Code)",
@@ -282,14 +282,15 @@ def _add_cursor_hook() -> Path:
 
 
 def _add_windsurf_hook() -> Path:
-    """Write DevMemory instructions to Windsurf's global memories directory.
+    """Write DevMemory instructions to Windsurf's global rules file.
 
-    Windsurf reads files from ``~/.codeium/windsurf/memories/`` at session start,
-    making this the equivalent of a SessionStart hook.
+    Windsurf reads ``~/.codeium/windsurf/memories/global_rules.md`` on every
+    session across all workspaces (always-on, 6000-char cap) — the documented
+    global-rules mechanism, our SessionStart equivalent.
     """
     memories_dir = Path.home() / ".codeium" / "windsurf" / "memories"
     memories_dir.mkdir(parents=True, exist_ok=True)
-    path = memories_dir / "devmemory_instructions.md"
+    path = memories_dir / "global_rules.md"
     path.write_text(_DEVMEMORY_RULES_CONTENT, encoding="utf-8")
     return path
 
@@ -456,39 +457,27 @@ def _add_windsurf_transcript_hook(hooks_dir: Path) -> Path:
     return hooks_path
 
 
-def _add_antigravity_hook(hooks_dir: Path) -> Path:
-    """Wire antigravity_save.py into Antigravity's agent hooks.
+def _add_antigravity_rules() -> Path:
+    """Write DevMemory instructions to Antigravity's global rules file.
 
-    Uses ``PostInvocation`` (after each agent invocation) + ``Stop`` so a turn is
-    captured even if the session ends abruptly. Antigravity pipes a HookInput
-    JSON (with a plaintext ``transcript_path``) to the command on stdin.
-    Idempotent; preserves other hook groups.
+    Antigravity's IDE runs with ``--app_data_dir antigravity`` and reads
+    ``~/.gemini/GEMINI.md`` as its global (all-workspace) rules file at session
+    start, so this is our SessionStart/restore equivalent.
+
+    NOTE: Antigravity has no *verified* per-turn transcript hook we can wire
+    from an installer. Its documented hook surfaces are the SDK's Python
+    decorators (for SDK-built agents, not the IDE) and a `hooks.json` whose path
+    differs across builds. Rather than ship a hook that silently never fires, we
+    drive save/restore through the MCP tools + this always-on rules file. Append
+    (don't clobber) so a hand-written GEMINI.md is preserved.
     """
-    hooks_path = Path.home() / ".gemini" / "antigravity-cli" / "hooks.json"
-    hooks_path.parent.mkdir(parents=True, exist_ok=True)
-
-    config: dict = {}
-    if hooks_path.exists():
-        try:
-            config = json.loads(hooks_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            config = {}
-
-    group = config.setdefault("devmemory-save", {})
-    command = f'python3 "{hooks_dir / "antigravity_save.py"}"'
-    for event in ("PostInvocation", "Stop"):
-        entries = group.setdefault(event, [])
-        already = any(
-            command in (h.get("command") or "")
-            for entry in entries
-            if isinstance(entry, dict)
-            for h in entry.get("hooks", [])
-        )
-        if not already:
-            entries.append({"hooks": [{"type": "command", "command": command, "timeout": 20}]})
-
-    hooks_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    return hooks_path
+    path = Path.home() / ".gemini" / "GEMINI.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    if "devmemory" not in existing.lower():
+        separator = "\n" if existing and not existing.endswith("\n") else ""
+        path.write_text(existing + separator + _DEVMEMORY_RULES_CONTENT, encoding="utf-8")
+    return path
 
 
 # ── API Key Storage ────────────────────────────────────────────────────────────
@@ -617,9 +606,9 @@ def install_tool(
         lines.append("   Cursor will load DevMemory instructions on every session automatically.")
 
     if tool.has_hook and tool.slug == "windsurf":
-        # Restore: global memories (rules-based).
+        # Restore: global rules file (always-on across workspaces).
         mem_path = _add_windsurf_hook()
-        lines.append(f"   Global memories hook: written to {mem_path}")
+        lines.append(f"   Global rules: written to {mem_path} (auto-read every session)")
         # Save: post_cascade_response_with_transcript hook → reads the JSONL
         # transcript Windsurf writes per response and POSTs the turn (no reliance
         # on the model, no need to read Windsurf's encrypted conversation store).
@@ -651,13 +640,12 @@ def install_tool(
         lines.append(f"   Global .kilocoderules: written to {kilo_path} (auto-read every session).")
 
     if tool.has_hook and tool.slug == "antigravity":
-        # Agent hooks (PostInvocation + Stop) hand us a plaintext transcript_path
-        # on stdin, so we capture each turn without touching the encrypted .pb
-        # conversation store.
-        hooks_dir = _copy_hook_scripts()
-        ag_path = _add_antigravity_hook(hooks_dir)
-        lines.append(f"   Agent hooks: wired into {ag_path}")
-        lines.append("   Each turn is saved automatically — no manual save_context needed.")
+        # No verified per-turn transcript hook exists for the Antigravity IDE
+        # (see _add_antigravity_rules). Save/restore runs through the MCP tools,
+        # driven by an always-on global rules file.
+        ag_path = _add_antigravity_rules()
+        lines.append(f"   Global rules: written to {ag_path} (auto-read every session).")
+        lines.append("   Save/restore runs through the DevMemory MCP tools.")
 
     # Tools with no per-turn transcript hook rely on the watch daemon to
     # auto-save. Installing it once starts a background service that covers

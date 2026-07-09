@@ -135,21 +135,27 @@ The whole point of DevMemory is that when your credits run out **mid-work**, the
 next tool can continue. That only works if your context was saved *before* the
 credits died — so saving must not depend on the AI remembering to do it.
 
-DevMemory saves deterministically, two ways:
+DevMemory saves three ways:
 
-1. **Tools with a transcript hook (Claude Code, Windsurf, Antigravity) — direct hooks.**
+1. **Tools with a transcript hook (Claude Code, Windsurf) — direct hooks.**
    These tools fire an OS-level hook after each turn and hand it a *plaintext*
    conversation transcript. `install` wires a small script into that hook which
    POSTs the turn — no `save_context` call, no reading the tool's (often
    encrypted) conversation store. Claude Code uses `Stop`; Windsurf uses
-   `post_cascade_response_with_transcript`; Antigravity uses its agent
-   `PostInvocation`/`Stop` hooks.
+   `post_cascade_response_with_transcript`.
 
 2. **Tools without a transcript hook (Cursor, Cline, Kilo, Codex) — the watch daemon.**
    These don't expose a transcript to a hook, but they *do* persist conversations
    locally. `devmemory watch` is a background daemon that tails those stores and
    pushes new turns — again, zero model cooperation. `install` sets it up as a
    systemd/launchd service automatically.
+
+3. **Tools with no verified hook (Antigravity) — MCP tools + rules.**
+   The Antigravity IDE exposes no per-turn transcript hook an installer can
+   reliably wire (its documented hooks are SDK decorators for SDK-built agents,
+   not the IDE). So `install` writes an always-on global rules file
+   (`~/.gemini/GEMINI.md`) that drives save/restore through the DevMemory MCP
+   tools. Agent-driven, not deterministic — but honest.
 
 Check what's supported and detected on your machine:
 
@@ -162,17 +168,18 @@ devmemory watch --list
 | Tool | Auto-save mechanism | Status |
 |---|---|---|
 | **Claude Code** | `Stop` hook (transcript) | ✅ deterministic |
-| **Windsurf** | `post_cascade_response_with_transcript` hook (transcript JSONL) | ✅ deterministic |
-| **Antigravity** | agent `PostInvocation`/`Stop` hooks (transcript_path) | ✅ deterministic |
+| **Windsurf** | `post_cascade_response_with_transcript` hook (transcript JSONL) + `global_rules.md` restore | ✅ deterministic |
+| **Antigravity** | MCP tools + `~/.gemini/GEMINI.md` global rules | ✅ agent-driven (MCP) |
 | **Cursor** | `watch` daemon (SQLite store) | ✅ verified |
 | **Cline / Kilo** | `watch` daemon (JSON task history) | ✅ supported |
 | **Codex** | `watch` daemon (`state_*.sqlite` + rollout JSONL) | ✅ supported |
 | _any JSONL tool_ | `watch` generic adapter (`~/.devmemory/watch_adapters.json`) | ✅ config-driven |
 
 > **Windsurf & Antigravity encrypt conversations on disk.** DevMemory does not
-> try to crack that — it captures each turn from the *plaintext transcript* the
-> tool's own hook provides. Honest coverage: `devmemory watch --list` shows the
-> exact mechanism per tool.
+> try to crack that. Windsurf hands its own hook a *plaintext transcript*, so we
+> capture each turn deterministically. Antigravity exposes no such hook to an
+> installer, so it saves/restores through the MCP tools + a global rules file.
+> Honest coverage: `devmemory watch --list` shows the exact mechanism per tool.
 
 ### Adding an unlisted tool (generic adapter)
 

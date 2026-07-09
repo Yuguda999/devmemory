@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""DevMemory Antigravity hook — auto-save each turn (deterministic).
+"""DevMemory Antigravity transcript parser — NOT wired by the installer.
 
-Wired to Antigravity's agent hooks (``~/.gemini/antigravity-cli/hooks.json``),
-event ``PostInvocation`` (after each agent invocation) and/or ``Stop``. The hook
-receives a JSON ``HookInput`` on stdin with an absolute ``transcript_path`` to
-the session's *plaintext* conversation transcript — so DevMemory never needs to
-touch Antigravity's encrypted on-disk ``.pb`` conversation store.
+The Antigravity IDE exposes no per-turn transcript hook an installer can
+reliably target: its documented hooks are the SDK's Python decorators (for
+SDK-built agents, not the IDE), and the community-reported ``hooks.json`` path
+differs across builds. So ``devmemory install --tool antigravity`` drives
+save/restore through the MCP tools + a ``~/.gemini/GEMINI.md`` rules file
+instead (see cli/install.py::_add_antigravity_rules).
 
-Antigravity's transcript schema isn't publicly pinned, so the parser is
-deliberately format-agnostic: it accepts JSONL or a single JSON doc, and pulls
-role/text from a variety of shapes. It saves the newest user+assistant turn.
-Always exits 0 so a DevMemory outage never blocks the agent.
+This module is retained as a standalone parser: if a verified per-turn hook is
+confirmed on a real build, wire this in. It accepts a stdin JSON payload with a
+``transcript_path``/``transcriptPath`` field and parses JSONL or a single JSON
+doc, pulling role/text from a variety of shapes. Always exits 0.
 """
 
 from __future__ import annotations
@@ -117,7 +118,7 @@ def main() -> int:
         },
     )
     cwd = payload.get("cwd") or os.getcwd()
-    transcript_path = payload.get("transcript_path")
+    transcript_path = payload.get("transcript_path") or payload.get("transcriptPath")
     if not transcript_path:
         log("antigravity_save", {"stage": "abort", "reason": "no transcript_path"})
         return 0

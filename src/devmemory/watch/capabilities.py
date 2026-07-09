@@ -24,7 +24,12 @@ class ToolSupport:
 HOOK_TOOLS = [
     ToolSupport("claude-code", "supported", "SessionStart + Stop hooks (transcript)."),
     ToolSupport("windsurf", "supported", "post_cascade_response_with_transcript hook (JSONL)."),
-    ToolSupport("antigravity", "supported", "PostInvocation + Stop agent hooks (transcript_path)."),
+]
+
+# Tools driven by the MCP tools + an always-on global rules file (agent-driven,
+# not deterministic). Used where the IDE exposes no verified per-turn hook.
+RULES_TOOLS = [
+    ToolSupport("antigravity", "supported", "MCP tools + ~/.gemini/GEMINI.md global rules."),
 ]
 
 # Tools captured by the watch DAEMON tailing their local store (no hook exists).
@@ -46,6 +51,10 @@ def render_status() -> str:
     for t in HOOK_TOOLS:
         lines.append(f"  {t.name:<12} [installed by `devmemory install`] {t.detail}")
 
+    lines.append("\nMCP + rules (agent-driven; no verified per-turn hook):")
+    for t in RULES_TOOLS:
+        lines.append(f"  {t.name:<12} [installed by `devmemory install`] {t.detail}")
+
     lines.append("\nWatch-daemon (tails the tool's local store — needs `devmemory watch`):")
     for t in WATCH_TOOLS:
         mark = "● found" if t.name in present else "○ not on this machine"
@@ -58,7 +67,8 @@ def render_status() -> str:
             lines.append(f"  {name}")
 
     lines.append(
-        "\nNote: Windsurf/Antigravity conversations are encrypted on disk; we capture"
-        "\nthem via the plaintext transcript their hook provides, not by reading the store."
+        "\nNote: Windsurf/Antigravity conversations are encrypted on disk. Windsurf is"
+        "\ncaptured via the plaintext transcript its hook provides; Antigravity has no"
+        "\nverified per-turn hook, so it saves/restores through the MCP tools + rules."
     )
     return "\n".join(lines)
