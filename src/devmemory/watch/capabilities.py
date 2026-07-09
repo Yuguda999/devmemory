@@ -19,8 +19,16 @@ class ToolSupport:
     detail: str
 
 
-# Tools with a real adapter (may or may not be installed on this machine).
-SUPPORTED = [
+# Tools captured by a HOOK the tool itself fires (transcript handed to us).
+# Deterministic, no watch daemon, no reading an encrypted store.
+HOOK_TOOLS = [
+    ToolSupport("claude-code", "supported", "SessionStart + Stop hooks (transcript)."),
+    ToolSupport("windsurf", "supported", "post_cascade_response_with_transcript hook (JSONL)."),
+    ToolSupport("antigravity", "supported", "PostInvocation + Stop agent hooks (transcript_path)."),
+]
+
+# Tools captured by the watch DAEMON tailing their local store (no hook exists).
+WATCH_TOOLS = [
     ToolSupport("cursor", "supported", "SQLite store (cursorDiskKV) — verified."),
     ToolSupport("cline", "supported", "JSON task history (api_conversation_history.json)."),
     ToolSupport("kilo", "supported", "Cline fork — same JSON format, different extension id."),
@@ -28,43 +36,29 @@ SUPPORTED = [
     ToolSupport("<generic>", "supported", "Any JSONL store via ~/.devmemory/watch_adapters.json."),
 ]
 
-# Known tools we deliberately do NOT fake support for.
-NOT_SUPPORTED = [
-    ToolSupport(
-        "windsurf",
-        "pending",
-        "Cascade conversations live in a local Codeium store whose format isn't "
-        "reversed yet. Restore works via the install-time hook; auto-save pending.",
-    ),
-    ToolSupport(
-        "antigravity",
-        "unsupported",
-        "Conversations are opaque/compressed protobuf (~/.gemini/antigravity/"
-        "conversations/*.pb) with no public schema — not parseable yet. Use a "
-        "generic adapter if a JSONL export becomes available.",
-    ),
-]
-
 
 def render_status() -> str:
     """Human-readable support + presence report for `devmemory watch --list`."""
     present = {a.name for a in available_adapters()}
-    lines = ["DevMemory watch — tool support:\n"]
+    lines = ["DevMemory — deterministic auto-save support:\n"]
 
-    lines.append("Supported (adapter exists):")
-    for t in SUPPORTED:
+    lines.append("Hook-based (the tool fires a hook, no daemon needed):")
+    for t in HOOK_TOOLS:
+        lines.append(f"  {t.name:<12} [installed by `devmemory install`] {t.detail}")
+
+    lines.append("\nWatch-daemon (tails the tool's local store — needs `devmemory watch`):")
+    for t in WATCH_TOOLS:
         mark = "● found" if t.name in present else "○ not on this machine"
         lines.append(f"  {t.name:<12} [{mark}] {t.detail}")
 
-    # Any generic adapters actually configured show up in `present` by their name.
-    extra = present - {t.name for t in SUPPORTED} - {"<generic>"}
+    extra = present - {t.name for t in WATCH_TOOLS} - {"<generic>"}
     if extra:
         lines.append("\nConfigured generic adapters (found):")
         for name in sorted(extra):
             lines.append(f"  {name}")
 
-    lines.append("\nNot yet auto-saved:")
-    for t in NOT_SUPPORTED:
-        lines.append(f"  {t.name:<12} [{t.status}] {t.detail}")
-
+    lines.append(
+        "\nNote: Windsurf/Antigravity conversations are encrypted on disk; we capture"
+        "\nthem via the plaintext transcript their hook provides, not by reading the store."
+    )
     return "\n".join(lines)

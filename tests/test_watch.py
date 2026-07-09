@@ -253,3 +253,85 @@ def test_generic_adapter_from_config(tmp_path: Path):
 
 def test_generic_adapter_no_config(tmp_path: Path):
     assert generic_adapters(tmp_path / "absent.json") == []
+
+
+# ── Windsurf + Antigravity hook parsers ──────────────────────────────────────
+
+
+def _load_hook_module(name: str):
+    import importlib.util
+
+    path = Path(__file__).resolve().parent.parent / "src" / "devmemory" / "hooks" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_windsurf_hook_extracts_last_turn(tmp_path: Path):
+    w = _load_hook_module("windsurf_save")
+    transcript = tmp_path / "traj.jsonl"
+    transcript.write_text(
+        "\n".join(
+            json.dumps(x)
+            for x in [
+                {
+                    "type": "user_input",
+                    "user_input": {"user_response": "add login"},
+                    "status": "done",
+                },
+                {
+                    "type": "planner_response",
+                    "planner_response": {"response": "Adding /login."},
+                    "status": "done",
+                },
+                {"type": "code_action", "code_action": {"path": "app.py"}, "status": "done"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    user, assistant = w._last_turn(str(transcript))
+    assert user == "add login"
+    assert assistant == "Adding /login."
+
+
+def test_windsurf_transcript_path_from_tool_info():
+    w = _load_hook_module("windsurf_save")
+    assert w._transcript_path({"tool_info": {"transcript_path": "/x/y.jsonl"}}) == "/x/y.jsonl"
+    assert w._transcript_path({"transcript_path": "/top/level.jsonl"}) == "/top/level.jsonl"
+    assert w._transcript_path({}) is None
+
+
+def test_antigravity_hook_parses_json_and_jsonl(tmp_path: Path):
+    a = _load_hook_module("antigravity_save")
+
+    doc = tmp_path / "conv.json"
+    doc.write_text(
+        json.dumps(
+            {
+                "messages": [
+                    {"role": "user", "content": "refactor auth"},
+                    {"role": "model", "content": [{"type": "text", "text": "Done."}]},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    user, assistant = a._last_turn(a._messages(str(doc)))
+    assert user == "refactor auth"
+    assert assistant == "Done."
+
+    jl = tmp_path / "conv.jsonl"
+    jl.write_text(
+        "\n".join(
+            json.dumps(x)
+            for x in [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "hello back"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    user2, assistant2 = a._last_turn(a._messages(str(jl)))
+    assert user2 == "hi"
+    assert assistant2 == "hello back"

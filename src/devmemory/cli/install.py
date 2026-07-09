@@ -109,6 +109,8 @@ TOOLS: dict[str, ToolConfig] = {
             "Darwin": "~/.gemini/antigravity/mcp_config.json",
             "Windows": "~/.gemini/antigravity/mcp_config.json",
         },
+        has_hook=True,
+        notes="Wires PostInvocation + Stop agent hooks (~/.gemini/antigravity-cli/hooks.json) for deterministic auto-save.",
     ),
     "cline": ToolConfig(
         name="Cline (VS Code)",
@@ -292,39 +294,6 @@ def _add_windsurf_hook() -> Path:
     return path
 
 
-def _add_windsurf_cascade_hook() -> Path:
-    """Wire DevMemory into Windsurf's Cascade hooks.json.
-
-    Windsurf's Cascade hooks fire at the OS level — not by AI judgment.
-    We add a post-hook that runs ``devmemory inject`` after every agent
-    message, ensuring context files are always fresh.
-    """
-    hooks_path = Path.home() / ".codeium" / "windsurf" / "hooks.json"
-    hooks_path.parent.mkdir(parents=True, exist_ok=True)
-
-    config: dict = {}
-    if hooks_path.exists():
-        try:
-            config = json.loads(hooks_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            config = {}
-
-    if "post" not in config:
-        config["post"] = []
-
-    inject_cmd = "devmemory inject --tool windsurf 2>/dev/null || true"
-    already = any(
-        "devmemory inject" in (h.get("command") or h.get("cmd") or "")
-        for h in config["post"]
-        if isinstance(h, dict)
-    )
-    if not already:
-        config["post"].append({"type": "shell", "command": inject_cmd})
-
-    hooks_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    return hooks_path
-
-
 def _add_cline_hook() -> Path:
     """Write global ~/.clinerules with DevMemory instructions.
 
@@ -361,9 +330,7 @@ def _add_kilo_hook() -> Path:
     return path
 
 
-# ── Claude Code hooks (OS-level, no AI judgment) ────────────────────────────────
-
-_CLAUDE_HOOK_FILES = ("_common.py", "session_start.py", "stop_save.py")
+# ── Transcript-based hooks (OS-level, no AI judgment) ───────────────────────────
 
 # Tools without a per-turn transcript hook — they need the watch daemon.
 _WATCH_TOOLS = {"cursor", "cline", "kilo"}
@@ -374,20 +341,21 @@ def _package_hooks_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "hooks"
 
 
-def _copy_claude_hooks() -> Path:
-    """Copy the shipped hook scripts into ~/.devmemory/hooks/ and return the dir.
+def _copy_hook_scripts() -> Path:
+    """Copy ALL shipped hook scripts into ~/.devmemory/hooks/ and return the dir.
 
-    Always overwrites so an upgrade picks up fixes (e.g. the turn-aggregation
-    fix in stop_save.py). Scripts are stdlib-only and run under the tool's own
-    ``python3``, so they don't depend on the installed devmemory package.
+    Always overwrites so an upgrade picks up fixes. Scripts are stdlib-only and
+    run under the tool's own ``python3``, so they don't depend on the installed
+    devmemory package. One copy serves every tool's hook (Claude Code, Windsurf,
+    Antigravity) since they share ``_common.py``.
     """
     src = _package_hooks_dir()
     dst = Path.home() / ".devmemory" / "hooks"
     dst.mkdir(parents=True, exist_ok=True)
-    for name in _CLAUDE_HOOK_FILES:
-        s = src / name
-        if s.exists():
-            shutil.copyfile(s, dst / name)
+    for s in src.glob("*.py"):
+        if s.name == "__init__.py":
+            continue
+        shutil.copyfile(s, dst / s.name)
     return dst
 
 
@@ -453,6 +421,74 @@ def _add_claude_code_hooks(hooks_dir: Path) -> Path:
 
     settings_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     return settings_path
+
+
+def _add_windsurf_transcript_hook(hooks_dir: Path) -> Path:
+    """Wire windsurf_save.py into Windsurf's post_cascade_response_with_transcript.
+
+    That hook fires after every Cascade response and writes the full conversation
+    to a JSONL file, handing us its path on stdin — so we capture each turn
+    deterministically without touching Windsurf's encrypted conversation store.
+    Idempotent; preserves any other hooks in the file.
+    """
+    hooks_path = Path.home() / ".codeium" / "windsurf" / "hooks.json"
+    hooks_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config: dict = {}
+    if hooks_path.exists():
+        try:
+            config = json.loads(hooks_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            config = {}
+
+    hooks = config.setdefault("hooks", {})
+    event = hooks.setdefault("post_cascade_response_with_transcript", [])
+    marker = "windsurf_save.py"
+    if not any(marker in (h.get("command") or "") for h in event if isinstance(h, dict)):
+        event.append(
+            {
+                "command": f'python3 "{hooks_dir / "windsurf_save.py"}"',
+                "show_output": False,
+            }
+        )
+
+    hooks_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return hooks_path
+
+
+def _add_antigravity_hook(hooks_dir: Path) -> Path:
+    """Wire antigravity_save.py into Antigravity's agent hooks.
+
+    Uses ``PostInvocation`` (after each agent invocation) + ``Stop`` so a turn is
+    captured even if the session ends abruptly. Antigravity pipes a HookInput
+    JSON (with a plaintext ``transcript_path``) to the command on stdin.
+    Idempotent; preserves other hook groups.
+    """
+    hooks_path = Path.home() / ".gemini" / "antigravity-cli" / "hooks.json"
+    hooks_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config: dict = {}
+    if hooks_path.exists():
+        try:
+            config = json.loads(hooks_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            config = {}
+
+    group = config.setdefault("devmemory-save", {})
+    command = f'python3 "{hooks_dir / "antigravity_save.py"}"'
+    for event in ("PostInvocation", "Stop"):
+        entries = group.setdefault(event, [])
+        already = any(
+            command in (h.get("command") or "")
+            for entry in entries
+            if isinstance(entry, dict)
+            for h in entry.get("hooks", [])
+        )
+        if not already:
+            entries.append({"hooks": [{"type": "command", "command": command, "timeout": 20}]})
+
+    hooks_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return hooks_path
 
 
 # ── API Key Storage ────────────────────────────────────────────────────────────
@@ -581,14 +617,16 @@ def install_tool(
         lines.append("   Cursor will load DevMemory instructions on every session automatically.")
 
     if tool.has_hook and tool.slug == "windsurf":
-        # Global memories (rules-based)
+        # Restore: global memories (rules-based).
         mem_path = _add_windsurf_hook()
         lines.append(f"   Global memories hook: written to {mem_path}")
-        # Cascade OS-level post-hook
-        cascade_path = _add_windsurf_cascade_hook()
-        lines.append(
-            f"   Cascade post-hook: written to {cascade_path} (fires after every agent message)."
-        )
+        # Save: post_cascade_response_with_transcript hook → reads the JSONL
+        # transcript Windsurf writes per response and POSTs the turn (no reliance
+        # on the model, no need to read Windsurf's encrypted conversation store).
+        hooks_dir = _copy_hook_scripts()
+        cascade_path = _add_windsurf_transcript_hook(hooks_dir)
+        lines.append(f"   Cascade transcript hook: wired into {cascade_path}")
+        lines.append("   Each Cascade turn is saved automatically — no manual save_context needed.")
 
     if tool.has_hook and tool.slug == "claude-code":
         # OS-level hooks (no AI judgment) drive save/restore. These do NOT touch
@@ -596,7 +634,7 @@ def install_tool(
         # clobbered it on Stop. Instead: SessionStart injects context via
         # hookSpecificOutput.additionalContext, and Stop POSTs each turn to the
         # API so nothing is lost even when the model never calls save_context.
-        hooks_dir = _copy_claude_hooks()
+        hooks_dir = _copy_hook_scripts()
         settings_path = _add_claude_code_hooks(hooks_dir)
         lines.append(f"   Hook scripts: {hooks_dir}")
         lines.append(f"   SessionStart + Stop hooks: wired into {settings_path}")
@@ -611,6 +649,15 @@ def install_tool(
     if tool.has_hook and tool.slug == "kilo":
         kilo_path = _add_kilo_hook()
         lines.append(f"   Global .kilocoderules: written to {kilo_path} (auto-read every session).")
+
+    if tool.has_hook and tool.slug == "antigravity":
+        # Agent hooks (PostInvocation + Stop) hand us a plaintext transcript_path
+        # on stdin, so we capture each turn without touching the encrypted .pb
+        # conversation store.
+        hooks_dir = _copy_hook_scripts()
+        ag_path = _add_antigravity_hook(hooks_dir)
+        lines.append(f"   Agent hooks: wired into {ag_path}")
+        lines.append("   Each turn is saved automatically — no manual save_context needed.")
 
     # Tools with no per-turn transcript hook rely on the watch daemon to
     # auto-save. Installing it once starts a background service that covers

@@ -137,15 +137,19 @@ credits died — so saving must not depend on the AI remembering to do it.
 
 DevMemory saves deterministically, two ways:
 
-1. **Claude Code — Stop hook.** `install --tool claude-code` wires an OS-level
-   `SessionStart` + `Stop` hook. Every turn is snapshotted from the transcript
-   automatically. No `save_context` call needed. Restores on the next session.
+1. **Tools with a transcript hook (Claude Code, Windsurf, Antigravity) — direct hooks.**
+   These tools fire an OS-level hook after each turn and hand it a *plaintext*
+   conversation transcript. `install` wires a small script into that hook which
+   POSTs the turn — no `save_context` call, no reading the tool's (often
+   encrypted) conversation store. Claude Code uses `Stop`; Windsurf uses
+   `post_cascade_response_with_transcript`; Antigravity uses its agent
+   `PostInvocation`/`Stop` hooks.
 
 2. **Tools without a transcript hook (Cursor, Cline, Kilo, Codex) — the watch daemon.**
-   These tools don't hand a transcript to a shell hook, but they *do* persist
-   conversations locally. `devmemory watch` is a background daemon that tails
-   those stores and pushes new turns to DevMemory — again, with zero model
-   cooperation. `install` sets it up as a systemd/launchd service automatically.
+   These don't expose a transcript to a hook, but they *do* persist conversations
+   locally. `devmemory watch` is a background daemon that tails those stores and
+   pushes new turns — again, zero model cooperation. `install` sets it up as a
+   systemd/launchd service automatically.
 
 Check what's supported and detected on your machine:
 
@@ -157,17 +161,18 @@ devmemory watch --list
 
 | Tool | Auto-save mechanism | Status |
 |---|---|---|
-| **Claude Code** | `Stop` hook (reads transcript) | ✅ deterministic |
+| **Claude Code** | `Stop` hook (transcript) | ✅ deterministic |
+| **Windsurf** | `post_cascade_response_with_transcript` hook (transcript JSONL) | ✅ deterministic |
+| **Antigravity** | agent `PostInvocation`/`Stop` hooks (transcript_path) | ✅ deterministic |
 | **Cursor** | `watch` daemon (SQLite store) | ✅ verified |
 | **Cline / Kilo** | `watch` daemon (JSON task history) | ✅ supported |
 | **Codex** | `watch` daemon (`state_*.sqlite` + rollout JSONL) | ✅ supported |
 | _any JSONL tool_ | `watch` generic adapter (`~/.devmemory/watch_adapters.json`) | ✅ config-driven |
-| **Windsurf** | restore via hook; auto-save pending | ⏳ pending |
-| **Antigravity** | conversations are opaque protobuf — not parseable yet | ❌ unsupported |
 
-> DevMemory does **not** fake support. Tools it can't yet auto-save are listed
-> honestly above and by `watch --list`, rather than shipped as adapters that
-> silently capture nothing.
+> **Windsurf & Antigravity encrypt conversations on disk.** DevMemory does not
+> try to crack that — it captures each turn from the *plaintext transcript* the
+> tool's own hook provides. Honest coverage: `devmemory watch --list` shows the
+> exact mechanism per tool.
 
 ### Adding an unlisted tool (generic adapter)
 
