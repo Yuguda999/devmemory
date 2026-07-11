@@ -7,6 +7,35 @@ DevMemory uses [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.0] — 2026-07-11
+
+### Added
+- **Attach model** — auto-save is now opt-in and scoped to one project at a time.
+  New CLI: `devmemory start` (attach current project, restore context, begin
+  saving), `devmemory continue` (re-attach the active project in a new tool),
+  `devmemory stop`, `devmemory status`. Backed by a single marker
+  `~/.devmemory/active.json` consulted by both the watch daemon and the hooks.
+- **`continue_here` MCP tool** — attaches the current project and returns its
+  resume prompt in one call (trigger it by saying "continue"/"resume").
+- **Global config** — `~/.devmemory/config.json` persists `{host, api_key}` so
+  `start`/`continue`/`inject` reach the right backend without re-passing flags.
+  Written by `install`/`start`/`continue`; resolution order is
+  explicit flag → env → config → default.
+- **New public site** — bold-gradient landing page (`/`) and docs page (`/docs`),
+  a self-contained design system (`css/site.css`), and no external CDNs.
+- **Dashboard reskin** — SPA restyled onto the shared indigo design system.
+
+### Changed
+- Auto-save is now strictly opt-in: nothing is saved until a project is attached
+  (was: the watch daemon/hooks saved every resolved project).
+- Serving layout: `/` → landing, `/docs` → docs page, `/app` → dashboard SPA.
+  FastAPI's OpenAPI docs moved to `/api-docs` and `/api-redoc`.
+- `inject`/hooks no longer fall back to hardcoded `localhost:8765` — they resolve
+  the backend from the persisted config.
+- Install docs reordered to lead with no-venv paths (npx → pipx → uv → pip).
+
+---
+
 ## [0.1.0] — 2026-05-28
 
 ### Added
