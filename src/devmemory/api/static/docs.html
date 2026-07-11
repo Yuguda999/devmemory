@@ -112,7 +112,7 @@
       <div class="table-wrap"><table>
         <thead><tr><th>Command</th><th>What it does</th></tr></thead>
         <tbody>
-          <tr><td><code>devmemory install</code></td><td>Wire DevMemory into a tool via MCP + hooks. <code>--tool all</code> configures every detected tool.</td></tr>
+          <tr><td><code>devmemory install</code></td><td>Wire DevMemory into a tool via MCP + hooks. <code>--tool all</code> configures every detected tool. Claude Code: <code>--config-dir &lt;dir[,dir…]&gt;</code> targets specific profile dirs (auto-detects <code>CLAUDE_CONFIG_DIR</code> otherwise).</td></tr>
           <tr><td><code>devmemory start</code></td><td>Attach a project, restore context, begin auto-saving.</td></tr>
           <tr><td><code>devmemory continue</code></td><td>Re-attach the active project to a new tool and resume saving.</td></tr>
           <tr><td><code>devmemory stop</code></td><td>Detach and stop the watch daemon.</td></tr>
@@ -122,6 +122,7 @@
           <tr><td><code>devmemory --rest</code></td><td>Run the REST API + dashboard locally (self-hosting).</td></tr>
         </tbody>
       </table></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p><strong>Multiple Claude Code profiles?</strong> Claude Code reads its config from <code>CLAUDE_CONFIG_DIR</code> when that env var is set (else <code>~/.claude.json</code>). <code>devmemory install --tool claude-code</code> auto-detects it. To set up several profiles in one run, pass <code>--config-dir ~/.claude-a,~/.claude-b</code> (comma-separated) — one install per dir.</p></div>
 
       <h2 id="tools">Supported tools</h2>
       <p>DevMemory never fakes support. Each tool is captured by a real, verified mechanism. There are four ways context gets saved:</p>

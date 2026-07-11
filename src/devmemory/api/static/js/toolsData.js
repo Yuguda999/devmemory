@@ -19,8 +19,9 @@ export const TOOLS = [
       'Linux / macOS': '~/.claude.json',
       'Windows': '%USERPROFILE%\\.claude.json',
     },
-    cli: 'claude mcp add devmemory devmemory -e DEVMEMORY_API_KEY={{API_KEY}} -e DEVMEMORY_HOST={{HOST}} -s user',
+    cli: 'claude mcp add devmemory devmemory mcp -e DEVMEMORY_API_KEY={{API_KEY}} -e DEVMEMORY_HOST={{HOST}} -s user',
     sync: { badge: 'HOOK + WATCH', tone: 'auto', text: 'SessionStart + Stop hooks capture the transcript automatically. <code>devmemory start</code> also runs the watch daemon over <code>~/.claude/projects</code> as a fallback, so the attached project saves even when the hooks aren\'t wired.' },
+    note: 'Custom config dir? If you run Claude Code with <code>CLAUDE_CONFIG_DIR</code> set, <code>devmemory install</code> auto-detects it and writes to the right place. For several profiles at once, pass <code>--config-dir ~/.claude-a,~/.claude-b</code> (comma-separated) — one install per profile. The tool-native <code>claude mcp add … -s user</code> command already targets whatever profile is active.',
   },
   {
     slug: 'cursor',
@@ -188,6 +189,7 @@ export function mcpJsonSnippet(host, apiKey) {
     mcpServers: {
       devmemory: {
         command: 'devmemory',
+        args: ['mcp'],
         env: { DEVMEMORY_API_KEY: apiKey || KEY_PLACEHOLDER, DEVMEMORY_HOST: host },
       },
     },

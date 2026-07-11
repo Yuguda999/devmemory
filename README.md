@@ -66,6 +66,16 @@ Then restart Claude Code (or run `/mcp` → reconnect in an active session). Ver
 claude mcp list   # devmemory should show ✔ Connected
 ```
 
+**Custom config dir / multiple profiles.** If you run Claude Code with
+`CLAUDE_CONFIG_DIR` set, its config lives at `<dir>/.claude.json` (not
+`~/.claude.json`). `devmemory install` auto-detects the env var and writes to the
+right place. To set up several profiles in one run, pass comma-separated dirs:
+
+```bash
+devmemory install --tool claude-code --api-key dm_key_YOUR_KEY \
+  --config-dir ~/.claude-work,~/.claude-personal
+```
+
 ### Connect from Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -262,8 +272,10 @@ generate_resume_prompt(session_id="...", target_tool="claude")
 | Command | Description |
 |---|---|
 | `devmemory` | Start MCP server (stdio, for AI tools) |
+| `devmemory mcp` | Start MCP server (stdio) — explicit form |
 | `devmemory --rest` | Start REST API + Web Dashboard |
 | `devmemory install --tool <name> --api-key <key>` | One-time setup for an AI tool |
+| `devmemory install --tool claude-code --config-dir <dir[,dir…]>` | Target specific Claude Code profile dirs (auto-detects `CLAUDE_CONFIG_DIR`) |
 | `devmemory install --all --api-key <key>` | Setup for all detected tools |
 | `devmemory inject [--cwd PATH]` | Auto-load context into CLAUDE.md, .augment/rules/ |
 | `devmemory watch` | Background daemon: auto-save Claude Code/Cursor/Cline/Kilo/Codex conversations |

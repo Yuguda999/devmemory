@@ -49,12 +49,14 @@ That writes an MCP entry that launches the server via `npx`:
 |---------|--------------|
 | `devmemory` / `devmemory mcp` | Start the MCP stdio server (what AI tools launch) |
 | `devmemory install --tool <name>\|--all --api-key <key> [--host <url>]` | Write the MCP config for a tool |
+| `devmemory install --tool claude-code --config-dir <dir[,dir…]>` | Target specific Claude Code profile dirs (auto-detects `CLAUDE_CONFIG_DIR`) |
 | `devmemory inject [--cwd <dir>] [--host <url>] [--api-key <key>]` | Write the latest resume prompt to `CLAUDE.md` |
 
 ## Environment
 
 - `DEVMEMORY_HOST` — backend URL (default `http://localhost:8765`)
 - `DEVMEMORY_API_KEY` — API key (fallback when `--api-key` / the tool arg is omitted)
+- `CLAUDE_CONFIG_DIR` — Claude Code only: when set, `install --tool claude-code` writes to `<dir>/.claude.json` (and `<dir>/settings.json`) instead of `~/.claude`. Comma-separated for multiple profiles.
 
 ## Tools exposed to the agent
 

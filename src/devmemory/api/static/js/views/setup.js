@@ -391,6 +391,12 @@ function showToolDetail(slug, apiKey) {
         </div>
       </div>` : ''}
 
+      ${t.note ? `
+      <div class="detail-note">
+        <div class="detail-note-icon">${icon('info', 14)}</div>
+        <div class="detail-note-text">${t.note}</div>
+      </div>` : ''}
+
       ${isToml ? `
       <div class="detail-note">
         <div class="detail-note-icon">${icon('info', 14)}</div>
