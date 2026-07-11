@@ -24,6 +24,7 @@ const TOOLS = [
       'Windows': '%USERPROFILE%\\.claude.json',
     },
     cli: 'claude mcp add devmemory devmemory -e DEVMEMORY_API_KEY={{API_KEY}} -e DEVMEMORY_HOST={{HOST}} -s user',
+    sync: { badge: 'HOOK', tone: 'auto', text: 'SessionStart + Stop hooks capture the transcript automatically — deterministic, no daemon.' },
   },
   {
     slug: 'cursor',
@@ -36,6 +37,7 @@ const TOOLS = [
       'Linux / macOS': '~/.cursor/mcp.json',
       'Windows': '%USERPROFILE%\\.cursor\\mcp.json',
     },
+    sync: { badge: 'WATCH', tone: 'auto', text: 'Run <code>devmemory watch</code> to tail Cursor\'s SQLite store (cursorDiskKV) and auto-save turns.' },
   },
   {
     slug: 'windsurf',
@@ -48,6 +50,7 @@ const TOOLS = [
       'Linux / macOS': '~/.codeium/windsurf/mcp_config.json',
       'Windows': '%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json',
     },
+    sync: { badge: 'HOOK', tone: 'auto', text: 'The install command wires a <code>post_cascade_response_with_transcript</code> hook that auto-saves each turn\'s plaintext transcript, plus <code>memories/global_rules.md</code> for restore.' },
   },
   {
     slug: 'augment',
@@ -60,7 +63,7 @@ const TOOLS = [
       'Linux / macOS': '~/.augment/settings.json',
       'Windows': '%APPDATA%\\augment\\settings.json',
     },
-    hook: true,
+    sync: { badge: 'HOOK', tone: 'auto', text: 'The install command adds a <strong>SessionStart hook</strong> that injects your project context automatically on every new session.' },
   },
   {
     slug: 'antigravity',
@@ -72,6 +75,7 @@ const TOOLS = [
     configs: {
       'All platforms': '~/.gemini/antigravity/mcp_config.json',
     },
+    sync: { badge: 'MCP + RULES', tone: '', text: 'Save/restore run through the MCP tools, driven by an always-on <code>~/.gemini/GEMINI.md</code> global rules file. Agent-driven — Antigravity exposes no verified per-turn IDE hook.' },
   },
   {
     slug: 'cline',
@@ -85,6 +89,7 @@ const TOOLS = [
       'macOS': '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json',
       'Windows': '%APPDATA%\\Code\\User\\globalStorage\\saoudrizwan.claude-dev\\settings\\cline_mcp_settings.json',
     },
+    sync: { badge: 'WATCH', tone: 'auto', text: 'Run <code>devmemory watch</code> to tail Cline\'s JSON task history and auto-save turns.' },
   },
   {
     slug: 'kilo',
@@ -97,6 +102,7 @@ const TOOLS = [
       'Linux / macOS': '~/.config/kilo/kilo.jsonc',
       'Windows': '%USERPROFILE%\\.config\\kilo\\kilo.jsonc',
     },
+    sync: { badge: 'WATCH', tone: 'auto', text: 'Cline fork — <code>devmemory watch</code> tails the same JSON format under a different extension id.' },
   },
   {
     slug: 'codex',
@@ -111,6 +117,7 @@ const TOOLS = [
       'Windows': '%USERPROFILE%\\.codex\\config.toml',
     },
     cli: 'codex mcp add devmemory --command devmemory --env DEVMEMORY_API_KEY={{API_KEY}} --env DEVMEMORY_HOST={{HOST}}',
+    sync: { badge: 'WATCH', tone: 'auto', text: 'Run <code>devmemory watch</code> to tail Codex\'s SQLite threads + rollout JSONL and auto-save turns.' },
   },
   {
     slug: 'claude-desktop',
@@ -124,6 +131,7 @@ const TOOLS = [
       'Linux': '~/.config/Claude/claude_desktop_config.json',
       'Windows': '%APPDATA%\\Claude\\claude_desktop_config.json',
     },
+    sync: { badge: 'MCP', tone: '', text: 'MCP tools only — save and recall on demand from within the chat. No background auto-save.' },
   },
 ];
 
@@ -238,7 +246,7 @@ export async function renderSetup(container) {
             </div>
             <div class="step-body" style="padding-bottom:0">
               <div class="step-title">Restart your tool — done</div>
-              <div class="step-alt">DevMemory saves and restores context automatically across all your tools.</div>
+              <div class="step-alt">Hook-based tools (Claude Code, Windsurf, Augment) auto-save on restart. Store-based tools (Cursor, Cline, Kilo, Codex) need <code>devmemory watch</code> running — see Automatic Context Sync below.</div>
             </div>
           </div>
         </div>
@@ -261,6 +269,7 @@ export async function renderSetup(container) {
                 <div class="tool-row-name">${t.name}</div>
                 <div class="tool-row-desc">${t.desc}</div>
               </div>
+              ${t.sync ? `<span class="sync-badge${t.sync.tone === 'auto' ? ' auto' : ''}" style="margin-right:8px">${t.sync.badge}</span>` : ''}
               <div class="tool-row-arrow">${icon('chevron-right', 15)}</div>
             </button>
           `).join('')}
@@ -301,23 +310,42 @@ export async function renderSetup(container) {
         <div class="sync-methods">
           <div class="sync-method">
             <div class="sync-method-label">
+              <span class="sync-badge auto">HOOK</span>
+              Tool-fired hook
+            </div>
+            <div class="step-alt">The tool itself fires a hook that hands us a plaintext transcript — deterministic, no daemon. <code>devmemory install</code> wires it. <strong>Claude Code</strong>, <strong>Windsurf</strong>, <strong>Augment</strong>.</div>
+          </div>
+          <div class="sync-method">
+            <div class="sync-method-label">
+              <span class="sync-badge auto">WATCH</span>
+              Watch daemon
+            </div>
+            <div class="step-code">
+              <code>devmemory watch</code>
+              <button class="code-copy-btn" data-copy="devmemory watch">${icon('copy', 13)}</button>
+            </div>
+            <div class="step-alt">Tails the tool's local store when no hook exists. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>. Run <code>devmemory watch --list</code> to see what's detected.</div>
+          </div>
+          <div class="sync-method">
+            <div class="sync-method-label">
+              <span class="sync-badge">MCP + RULES</span>
+              Agent-driven
+            </div>
+            <div class="step-alt">Save/restore run through the MCP tools, driven by an always-on global rules file. Used where the IDE exposes no verified per-turn hook. <strong>Antigravity</strong> (<code>~/.gemini/GEMINI.md</code>).</div>
+          </div>
+          <div class="sync-method">
+            <div class="sync-method-label">
               <span class="sync-badge">CLI</span>
-              Manual Inject
+              Manual inject
             </div>
             <div class="step-code">
               <code>devmemory inject --cwd /path/to/project</code>
               <button class="code-copy-btn" data-copy="devmemory inject --cwd /path/to/project">${icon('copy', 13)}</button>
             </div>
-            <div class="step-alt">Writes to <code>CLAUDE.md</code> and <code>.augment/rules/devmemory.md</code></div>
-          </div>
-          <div class="sync-method">
-            <div class="sync-method-label">
-              <span class="sync-badge auto">AUTO</span>
-              Augment SessionStart Hook
-            </div>
-            <div class="step-alt"><code>devmemory install --tool augment</code> adds a hook that loads context automatically every session.</div>
+            <div class="step-alt">Writes context to <code>CLAUDE.md</code> and <code>.augment/rules/devmemory.md</code> on demand.</div>
           </div>
         </div>
+        <div class="step-alt" style="margin-top:12px">Windsurf and Antigravity encrypt conversations on disk — Windsurf is captured via the plaintext transcript its hook provides; Antigravity has no verified per-turn hook, so it saves/restores through the MCP tools + rules.</div>
       </div>
 
       <!-- ── Connection Status ──────────────────────────────────── -->
@@ -452,10 +480,16 @@ function showToolDetail(slug, apiKey) {
         </div>
       </div>
 
-      ${t.hook ? `
-      <div class="detail-note">
-        <div class="detail-note-icon">${icon('info', 14)}</div>
-        <div class="detail-note-text">The install command also adds a <strong>SessionStart hook</strong> that injects your project context automatically on every new Augment session — no manual steps needed.</div>
+      ${t.sync ? `
+      <div class="detail-method">
+        <div class="detail-method-label">
+          <span class="method-badge${t.sync.tone === 'auto' ? ' recommended' : ''}">${t.sync.badge}</span>
+          Context sync
+        </div>
+        <div class="detail-note">
+          <div class="detail-note-icon">${icon('info', 14)}</div>
+          <div class="detail-note-text">${t.sync.text}</div>
+        </div>
       </div>` : ''}
 
       ${isToml ? `
