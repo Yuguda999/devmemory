@@ -1,6 +1,6 @@
 import { api, state } from '../api.js';
 import { icon, toast, spinner, copyText } from '../utils.js';
-import { TOOLS, tomlSnippet as _tomlSnippet, mcpJsonSnippet as _mcpJsonSnippet } from '../toolsData.js';
+import { TOOLS, PROMPTS, tomlSnippet as _tomlSnippet, mcpJsonSnippet as _mcpJsonSnippet } from '../toolsData.js';
 
 // Tool metadata + config snippets are shared with the public docs page via
 // ../toolsData.js. In-app we bind the host to the current origin.
@@ -129,6 +129,26 @@ export async function renderSetup(container) {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ── Prompts to paste ───────────────────────────────────── -->
+      <div class="card setup-section">
+        <div class="setup-section-header">
+          <div class="setup-section-icon">${icon('message-square', 18)}</div>
+          <div>
+            <h3>Prompts to paste</h3>
+          </div>
+        </div>
+        <div class="step-alt" style="margin-bottom:14px">No commands to memorise — say one of these to your AI tool and it drives DevMemory for the project folder you have open.</div>
+        ${PROMPTS.map(p => `
+          <div style="margin-bottom:14px">
+            <div class="step-title" style="margin-bottom:6px">${escHtml(p.label)}</div>
+            <div class="step-code">
+              <code>${escHtml(p.text)}</code>
+              <button class="code-copy-btn" data-copy="${escHtml(p.text)}">${icon('copy', 13)}</button>
+            </div>
+          </div>`).join('')}
+        <div class="step-alt" style="margin-top:4px">For “switch to another project”, replace <code>PROJECT_NAME</code> with the project's name. Works in any MCP-connected tool.</div>
       </div>
 
       <!-- ── Supported Tools ────────────────────────────────────── -->

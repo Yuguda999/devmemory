@@ -167,6 +167,18 @@ agent calls `continue_here` for the folder you have open, which attaches that
 project and restores its context. The project is resolved from the open folder's
 git remote or name; to target a different one, tell the agent its name.
 
+### Prompts to paste
+
+No commands to memorise — say one of these to your AI tool and it drives
+DevMemory through the MCP tools for the project folder you have open:
+
+- **Continue / attach** — *"Use DevMemory: continue where we left off on this project. Attach this folder and load my saved context before we start."*
+- **Save progress now** — *"Save our progress to DevMemory now — the current goal, the key decisions we made, and the next steps to pick up later."*
+- **Check what's saved** — *"What has DevMemory saved for this project so far? Load the latest context and summarise it."*
+- **Switch project** — *"Attach DevMemory to the project named `PROJECT_NAME` and load its saved context."*
+
+These are also copy-buttoned in the dashboard **Setup** page and the **docs**.
+
 Check what's supported and detected on your machine:
 
 ```bash

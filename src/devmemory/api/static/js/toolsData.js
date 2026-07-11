@@ -147,6 +147,32 @@ export const SYNC_MECHANISMS = [
   { badge: 'CLI', tone: '', label: 'Manual inject', text: '<code>devmemory inject</code> writes context to <code>CLAUDE.md</code> / rules files on demand.' },
 ];
 
+// ── Copy-paste prompts (say these to any MCP-connected AI tool) ──────────────
+// The agent maps these to DevMemory MCP tools; it uses the open project folder
+// as the project, so the user never has to name one (except "switch project").
+export const PROMPTS = [
+  {
+    label: 'Continue / attach this project',
+    text: 'Use DevMemory: continue where we left off on this project. Attach this folder and load my saved context before we start.',
+  },
+  {
+    label: 'Save progress now',
+    text: 'Save our progress to DevMemory now — the current goal, the key decisions we made, and the next steps to pick up later.',
+  },
+  {
+    label: 'Check what is saved',
+    text: 'What has DevMemory saved for this project so far? Load the latest context and summarise it.',
+  },
+  {
+    label: 'Start saving a fresh project',
+    text: 'Start tracking this project in DevMemory: attach this folder and save our goal so context survives if I switch tools.',
+  },
+  {
+    label: 'Switch to another project',
+    text: 'Attach DevMemory to the project named "PROJECT_NAME" and load its saved context.',
+  },
+];
+
 // ── Config snippets (host + key parameterized) ───────────────────────────────
 export function tomlSnippet(host, apiKey) {
   return `[mcp_servers.devmemory]

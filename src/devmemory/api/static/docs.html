@@ -47,6 +47,7 @@
       <a href="#quickstart">Quick start</a>
       <div class="grp">Core</div>
       <a href="#attach">The attach model</a>
+      <a href="#prompts">Prompts to paste</a>
       <a href="#cli">CLI commands</a>
       <a href="#tools">Supported tools</a>
       <div class="grp">Reference</div>
@@ -101,6 +102,11 @@
         <li><code>devmemory status</code> — show the active project, the attached tool, and the daemon state.</li>
       </ul>
       <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Both the watch daemon and the deterministic hooks respect the active project. If nothing is attached, they save nothing and log a hint to run <code>devmemory start</code>.</p></div>
+
+      <h2 id="prompts">Prompts to paste</h2>
+      <p>No commands to memorise — say one of these to your AI tool and it drives DevMemory through the MCP tools. It uses the project folder you have open, so you never name a project (except "switch"). Click to copy:</p>
+      <div id="docs-prompts"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>For "switch to another project", replace <code>PROJECT_NAME</code> with the project's name. These work in any MCP-connected tool (Claude Code, Cursor, Windsurf, Augment, Antigravity, Claude Desktop, Cline, Kilo).</p></div>
 
       <h2 id="cli">CLI commands</h2>
       <div class="table-wrap"><table>

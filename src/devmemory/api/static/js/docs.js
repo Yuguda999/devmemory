@@ -3,7 +3,7 @@
 // sync mechanisms never drift between /docs and /app#setup. Static prose stays in
 // docs.html; this only fills the marked placeholders.
 
-import { INSTALL_METHODS, SYNC_MECHANISMS, TOOLS } from './toolsData.js';
+import { INSTALL_METHODS, PROMPTS, SYNC_MECHANISMS, TOOLS } from './toolsData.js';
 
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -43,9 +43,17 @@ function renderMechanisms(el) {
     </div>`).join('');
 }
 
+function renderPrompts(el) {
+  el.innerHTML = PROMPTS.map((p) => `
+    <p style="margin:18px 0 6px;font-weight:600">${esc(p.label)}</p>
+    <div class="code"><button class="copy-btn" data-copy="${esc(p.text)}">${copyIcon}</button><pre>${esc(p.text)}</pre></div>`).join('');
+}
+
 const install = document.getElementById('docs-install');
 if (install) renderInstall(install);
 const tools = document.getElementById('docs-tools');
 if (tools) renderTools(tools);
 const mech = document.getElementById('docs-mechanisms');
 if (mech) renderMechanisms(mech);
+const prompts = document.getElementById('docs-prompts');
+if (prompts) renderPrompts(prompts);
