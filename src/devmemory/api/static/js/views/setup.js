@@ -24,7 +24,7 @@ const TOOLS = [
       'Windows': '%USERPROFILE%\\.claude.json',
     },
     cli: 'claude mcp add devmemory devmemory -e DEVMEMORY_API_KEY={{API_KEY}} -e DEVMEMORY_HOST={{HOST}} -s user',
-    sync: { badge: 'HOOK', tone: 'auto', text: 'SessionStart + Stop hooks capture the transcript automatically — deterministic, no daemon.' },
+    sync: { badge: 'HOOK', tone: 'auto', text: 'SessionStart + Stop hooks capture the transcript automatically — deterministic, no daemon. Saves only the project you attach with <code>devmemory start</code>.' },
   },
   {
     slug: 'cursor',
@@ -37,7 +37,7 @@ const TOOLS = [
       'Linux / macOS': '~/.cursor/mcp.json',
       'Windows': '%USERPROFILE%\\.cursor\\mcp.json',
     },
-    sync: { badge: 'WATCH', tone: 'auto', text: 'Run <code>devmemory watch</code> to tail Cursor\'s SQLite store (cursorDiskKV) and auto-save turns.' },
+    sync: { badge: 'WATCH', tone: 'auto', text: '<code>devmemory start</code> launches a background daemon that tails Cursor\'s SQLite store (cursorDiskKV) and auto-saves the attached project.' },
   },
   {
     slug: 'windsurf',
@@ -50,7 +50,7 @@ const TOOLS = [
       'Linux / macOS': '~/.codeium/windsurf/mcp_config.json',
       'Windows': '%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json',
     },
-    sync: { badge: 'HOOK', tone: 'auto', text: 'The install command wires a <code>post_cascade_response_with_transcript</code> hook that auto-saves each turn\'s plaintext transcript, plus <code>memories/global_rules.md</code> for restore.' },
+    sync: { badge: 'HOOK', tone: 'auto', text: 'The install command wires a <code>post_cascade_response_with_transcript</code> hook that auto-saves each turn\'s plaintext transcript (for the attached project), plus <code>memories/global_rules.md</code> for restore.' },
   },
   {
     slug: 'augment',
@@ -63,7 +63,7 @@ const TOOLS = [
       'Linux / macOS': '~/.augment/settings.json',
       'Windows': '%APPDATA%\\augment\\settings.json',
     },
-    sync: { badge: 'HOOK', tone: 'auto', text: 'The install command adds a <strong>SessionStart hook</strong> that injects your project context automatically on every new session.' },
+    sync: { badge: 'HOOK', tone: 'auto', text: 'The install command adds a <strong>SessionStart hook</strong> that injects the attached project\'s context automatically on every new session.' },
   },
   {
     slug: 'antigravity',
@@ -89,7 +89,7 @@ const TOOLS = [
       'macOS': '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json',
       'Windows': '%APPDATA%\\Code\\User\\globalStorage\\saoudrizwan.claude-dev\\settings\\cline_mcp_settings.json',
     },
-    sync: { badge: 'WATCH', tone: 'auto', text: 'Run <code>devmemory watch</code> to tail Cline\'s JSON task history and auto-save turns.' },
+    sync: { badge: 'WATCH', tone: 'auto', text: '<code>devmemory start</code> launches the daemon that tails Cline\'s JSON task history and auto-saves the attached project.' },
   },
   {
     slug: 'kilo',
@@ -102,7 +102,7 @@ const TOOLS = [
       'Linux / macOS': '~/.config/kilo/kilo.jsonc',
       'Windows': '%USERPROFILE%\\.config\\kilo\\kilo.jsonc',
     },
-    sync: { badge: 'WATCH', tone: 'auto', text: 'Cline fork — <code>devmemory watch</code> tails the same JSON format under a different extension id.' },
+    sync: { badge: 'WATCH', tone: 'auto', text: 'Cline fork — <code>devmemory start</code> launches the daemon that tails the same JSON format under a different extension id.' },
   },
   {
     slug: 'codex',
@@ -117,7 +117,7 @@ const TOOLS = [
       'Windows': '%USERPROFILE%\\.codex\\config.toml',
     },
     cli: 'codex mcp add devmemory --command devmemory --env DEVMEMORY_API_KEY={{API_KEY}} --env DEVMEMORY_HOST={{HOST}}',
-    sync: { badge: 'WATCH', tone: 'auto', text: 'Run <code>devmemory watch</code> to tail Codex\'s SQLite threads + rollout JSONL and auto-save turns.' },
+    sync: { badge: 'WATCH', tone: 'auto', text: '<code>devmemory start</code> launches the daemon that tails Codex\'s SQLite threads + rollout JSONL and auto-saves the attached project.' },
   },
   {
     slug: 'claude-desktop',
@@ -199,10 +199,10 @@ export async function renderSetup(container) {
             <div class="step-body">
               <div class="step-title">Install DevMemory</div>
               <div class="step-code">
-                <code>pip install devmemory-ai</code>
-                <button class="code-copy-btn" data-copy="pip install devmemory-ai">${icon('copy', 13)}</button>
+                <code>npx -y @commanderzero/devmemory --help</code>
+                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory --help">${icon('copy', 13)}</button>
               </div>
-              <div class="step-alt"><strong>Prefer Node?</strong> Nothing to install — use <code>npx -y @commanderzero/devmemory</code> in step 3. &nbsp;·&nbsp; Python alts: <code>uv tool install devmemory-ai</code>, <code>pipx install devmemory-ai</code></div>
+              <div class="step-alt"><strong>Node path — nothing to install.</strong> Prefer Python? <code>pipx install devmemory-ai</code> or <code>uv tool install devmemory-ai</code> (both isolate for you). Plain <code>pip install devmemory-ai</code> works too, but needs a virtual environment on PEP 668 systems (modern Debian/Ubuntu).</div>
             </div>
           </div>
 
@@ -242,11 +242,30 @@ export async function renderSetup(container) {
 
           <div class="setup-step">
             <div class="step-indicator">
-              <span class="step-number last">4</span>
+              <span class="step-number">4</span>
+              <div class="step-line"></div>
+            </div>
+            <div class="step-body">
+              <div class="step-title">Start a session in your project</div>
+              <div class="step-code">
+                <code>devmemory start</code>
+                <button class="code-copy-btn" data-copy="devmemory start">${icon('copy', 13)}</button>
+              </div>
+              <div class="step-alt">Run inside the project you're working on. DevMemory attaches to <strong>that one project</strong>, restores its saved context, and auto-saves as you work — nothing is saved until you start. Runs as long as you're coding; idle gaps are fine.</div>
+            </div>
+          </div>
+
+          <div class="setup-step">
+            <div class="step-indicator">
+              <span class="step-number last">5</span>
             </div>
             <div class="step-body" style="padding-bottom:0">
-              <div class="step-title">Restart your tool — done</div>
-              <div class="step-alt">Hook-based tools (Claude Code, Windsurf, Augment) auto-save on restart. Store-based tools (Cursor, Cline, Kilo, Codex) need <code>devmemory watch</code> running — see Automatic Context Sync below.</div>
+              <div class="step-title">Switch tools anytime</div>
+              <div class="step-code">
+                <code>devmemory continue</code>
+                <button class="code-copy-btn" data-copy="devmemory continue">${icon('copy', 13)}</button>
+              </div>
+              <div class="step-alt">Open the same project in another tool and run this — your context loads there and saving resumes from the new tool. End with <code>devmemory stop</code>.</div>
             </div>
           </div>
         </div>
@@ -307,6 +326,10 @@ export async function renderSetup(container) {
           </div>
         </div>
 
+        <div class="step-alt" style="margin-bottom:14px">
+          <strong>Opt-in, one project at a time.</strong> Auto-save is scoped to the project you attach with <code>devmemory start</code> — nothing is saved until you do. Move to another tool with <code>devmemory continue</code>, end with <code>devmemory stop</code>, check state with <code>devmemory status</code>. The mechanisms below are <em>how</em> each tool captures turns once attached.
+        </div>
+
         <div class="sync-methods">
           <div class="sync-method">
             <div class="sync-method-label">
@@ -320,11 +343,7 @@ export async function renderSetup(container) {
               <span class="sync-badge auto">WATCH</span>
               Watch daemon
             </div>
-            <div class="step-code">
-              <code>devmemory watch</code>
-              <button class="code-copy-btn" data-copy="devmemory watch">${icon('copy', 13)}</button>
-            </div>
-            <div class="step-alt">Tails the tool's local store when no hook exists. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>. Run <code>devmemory watch --list</code> to see what's detected.</div>
+            <div class="step-alt">For tools with no hook, <code>devmemory start</code> launches a background daemon that tails the tool's local store. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>. Run <code>devmemory watch --list</code> to see what's detected.</div>
           </div>
           <div class="sync-method">
             <div class="sync-method-label">

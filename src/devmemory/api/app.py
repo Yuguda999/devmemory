@@ -15,7 +15,9 @@ from devmemory.config import settings
 from devmemory.db.engine import close_db, init_db
 
 _STATIC_DIR = Path(__file__).parent / "static"
-_INDEX_HTML = _STATIC_DIR / "index.html"
+_INDEX_HTML = _STATIC_DIR / "index.html"      # authed dashboard SPA (served at /app)
+_LANDING_HTML = _STATIC_DIR / "landing.html"  # public marketing page (served at /)
+_DOCS_HTML = _STATIC_DIR / "docs.html"        # public docs page (served at /docs)
 
 
 @asynccontextmanager
@@ -38,10 +40,10 @@ def create_app() -> FastAPI:
             "Universal Dev Memory — A persistent MCP server for cross-tool coding context. "
             "Store, structure, and serve coding context so any AI tool can continue seamlessly."
         ),
-        version="0.1.0",
+        version="0.2.0",
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/api-docs",   # moved off /docs — that path serves the public docs page
+        redoc_url="/api-redoc",
     )
 
     # ── CORS ───────────────────────────────────────────────────
@@ -79,17 +81,28 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str | bool]:
         return {
             "status": "ok",
-            "version": "0.1.0",
+            "version": "0.2.0",
             "self_hosted": settings.is_self_hosted,
             "deployment_mode": settings.deployment_mode,
         }
 
-    # ── Static Files + SPA ─────────────────────────────────────
+    # ── Static Files + pages ───────────────────────────────────
+    # Public marketing lives at /, public docs at /docs, and the authed
+    # dashboard SPA at /app. The SPA uses hash routing, so it works fine under
+    # any base path. Falls back to the SPA at / if the landing page is absent.
     if _STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
         @app.get("/", include_in_schema=False)
-        async def serve_spa() -> FileResponse:
+        async def serve_landing() -> FileResponse:
+            return FileResponse(str(_LANDING_HTML if _LANDING_HTML.exists() else _INDEX_HTML))
+
+        @app.get("/docs", include_in_schema=False)
+        async def serve_docs() -> FileResponse:
+            return FileResponse(str(_DOCS_HTML if _DOCS_HTML.exists() else _INDEX_HTML))
+
+        @app.get("/app", include_in_schema=False)
+        async def serve_app() -> FileResponse:
             return FileResponse(str(_INDEX_HTML))
 
     return app

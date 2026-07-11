@@ -30,19 +30,21 @@ Same project, same memory, zero friction.
 ## 30-Second Quick Start
 
 ```bash
-# Install globally so the `devmemory` command is on your PATH.
-# The PyPI package is `devmemory-ai`; it installs the `devmemory` command.
-pip install devmemory-ai       # or: uv tool install devmemory-ai  /  pipx install devmemory-ai
+# Node — nothing to install (recommended, no Python needed):
+npx -y @commanderzero/devmemory install --tool cursor --api-key dm_key_YOUR_KEY --host https://your-backend
+
+# Python — pipx (or uv) manages an isolated environment for you:
+pipx install devmemory-ai       # or: uv tool install devmemory-ai
 
 devmemory          # starts MCP server (stdio, for AI tools)
 devmemory --rest   # starts REST API (HTTP, for dashboards)
 ```
 
-> **Prefer Node? No Python required.** Connect any tool via npm:
-> ```bash
-> npx -y @commanderzero/devmemory install --tool cursor --api-key dm_key_YOUR_KEY --host https://your-backend
-> ```
-> Same tools, same backend — it just runs the MCP client on Node instead.
+> **Don't use plain `pip install` on modern Linux.** On Debian/Ubuntu (PEP 668)
+> a system `pip install devmemory-ai` errors with "externally-managed-environment"
+> unless you're inside a virtual environment. Use **npx**, **pipx**, or **uv tool
+> install** above — they need no venv. The PyPI package is `devmemory-ai`; it
+> installs the `devmemory` command.
 
 > **Install it for real — don't rely on `uvx` in MCP configs.** AI tools
 > launch the MCP server with their own environment, not your shell's PATH. A bare
