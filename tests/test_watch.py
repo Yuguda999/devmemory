@@ -263,6 +263,24 @@ def test_claude_code_adapter_missing(tmp_path: Path):
     assert list(adapter.conversations()) == []
 
 
+# ── attach-model save mode (honest per-tool status) ──────────────────────────
+
+
+def test_save_mode_per_tool():
+    from devmemory.watch.capabilities import save_mode
+
+    # Store-tailing + save-hook tools auto-save the attached project.
+    for t in ("claude-code", "cursor", "cline", "kilo", "codex", "windsurf"):
+        assert save_mode(t) == "auto", t
+    # No save hook / no tailable store — daemon can't save; MCP-driven only.
+    # (augment's only hook is SessionStart = restore, so its SAVE is MCP too.)
+    for t in ("antigravity", "claude-desktop", "augment"):
+        assert save_mode(t) == "mcp", t
+    # No --tool passed / unrecognised.
+    for t in (None, "unknown", "vim"):
+        assert save_mode(t) == "unknown", t
+
+
 # ── generic config-driven adapter ────────────────────────────────────────────
 
 

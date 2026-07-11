@@ -109,6 +109,34 @@ def _persist_conn(args) -> None:
     write_config(host=getattr(args, "host", None), api_key=getattr(args, "api_key", None))
 
 
+def _print_save_notice(tool: str, pid: int | None) -> None:
+    """Print an HONEST auto-save status for the attached tool.
+
+    The daemon can only save tools with a tailable local store (or a tool-fired
+    hook). MCP/rules tools (Antigravity, Claude Desktop) save only when the agent
+    calls save_context/continue_here in-chat — saying "Auto-save is ON" for them
+    would be a lie, and lying about what persists is exactly what DevMemory won't do.
+    """
+    from devmemory.watch.capabilities import save_mode
+
+    mode = save_mode(tool)
+    running = f"   Watch daemon running (pid {pid})." if pid else "   Watch daemon already running."
+    if mode == "auto":
+        print(f"{running} Auto-save is ON for this project only.")
+    elif mode == "mcp":
+        print(running)
+        print(
+            f"   ⚠️  {tool} has no tailable store or hook — the daemon can't auto-save it.\n"
+            "   Saving happens in chat via DevMemory's MCP tools (save_context /\n"
+            "   continue_here), driven by the rules file `devmemory install` wrote."
+        )
+    else:  # unknown tool (no --tool passed)
+        print(f"{running} Auto-save is ON for store/hook tools")
+        print("   (Claude Code, Cursor, Cline, Kilo, Codex, Windsurf).")
+        print("   Antigravity / Claude Desktop / Augment save in chat via MCP tools instead.")
+        print("   Pass --tool <name> for exact per-tool guidance.")
+
+
 def run_start(args) -> None:
     _persist_conn(args)
     cwd = getattr(args, "cwd", None) or os.getcwd()
@@ -119,8 +147,7 @@ def run_start(args) -> None:
     print(f"   Backend: {resolve_host()}")
     _restore(cwd, tool)
     pid = _spawn_daemon()
-    if pid:
-        print(f"   Watch daemon running (pid {pid}). Auto-save is ON for this project only.")
+    _print_save_notice(tool, pid)
     print("   Switch tools later with: devmemory continue")
 
 
@@ -141,8 +168,7 @@ def run_continue(args) -> None:
     print(f"⏩ Continuing '{marker['name']}' ({marker['slug']}) in {tool}.")
     _restore(cwd, tool)
     pid = _spawn_daemon()
-    if pid:
-        print(f"   Watch daemon running (pid {pid}).")
+    _print_save_notice(tool, pid)
 
 
 def run_stop(args) -> None:

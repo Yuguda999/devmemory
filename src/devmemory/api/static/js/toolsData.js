@@ -59,7 +59,7 @@ export const TOOLS = [
       'Linux / macOS': '~/.augment/settings.json',
       'Windows': '%APPDATA%\\augment\\settings.json',
     },
-    sync: { badge: 'HOOK', tone: 'auto', text: 'The install command adds a <strong>SessionStart hook</strong> that injects the attached project\'s context automatically on every new session.' },
+    sync: { badge: 'HOOK + MCP', tone: 'auto', text: 'A <strong>SessionStart hook</strong> injects the attached project\'s context on every new session (restore). To attach + save, just say <strong>“continue”</strong> — the agent calls <code>continue_here</code> for the open folder and saves via the MCP tools as you work.' },
   },
   {
     slug: 'antigravity',
@@ -71,7 +71,7 @@ export const TOOLS = [
     configs: {
       'All platforms': '~/.gemini/antigravity/mcp_config.json',
     },
-    sync: { badge: 'MCP + RULES', tone: '', text: 'Save/restore run through the MCP tools, driven by an always-on <code>~/.gemini/GEMINI.md</code> global rules file. Agent-driven — Antigravity exposes no verified per-turn IDE hook.' },
+    sync: { badge: 'MCP + RULES', tone: '', text: 'Just say <strong>“continue”</strong> (or “start on this project”) — the agent calls <code>continue_here</code> for the open folder, which attaches that project and restores its context. Saves happen via the MCP tools as you work, driven by the always-on <code>~/.gemini/GEMINI.md</code> rules file. No daemon (the store is encrypted); no CLI needed.' },
   },
   {
     slug: 'cline',
@@ -127,7 +127,7 @@ export const TOOLS = [
       'Linux': '~/.config/Claude/claude_desktop_config.json',
       'Windows': '%APPDATA%\\Claude\\claude_desktop_config.json',
     },
-    sync: { badge: 'MCP', tone: '', text: 'MCP tools only — save and recall on demand from within the chat. No background auto-save.' },
+    sync: { badge: 'MCP', tone: '', text: 'MCP tools only — say <strong>“continue”</strong> and the agent attaches + restores via <code>continue_here</code>, then saves as you work. No project folder in a desktop chat, so name the project (<code>project="…"</code>) if the agent can\'t infer one.' },
   },
 ];
 
@@ -143,7 +143,7 @@ export const INSTALL_METHODS = [
 export const SYNC_MECHANISMS = [
   { badge: 'HOOK', tone: 'auto', label: 'Tool-fired hook', text: 'The tool itself fires a hook that hands us a plaintext transcript — deterministic, no daemon. <code>devmemory install</code> wires it. <strong>Claude Code</strong>, <strong>Windsurf</strong>, <strong>Augment</strong>.' },
   { badge: 'WATCH', tone: 'auto', label: 'Watch daemon', text: 'For tools with no hook, <code>devmemory start</code> launches a background daemon that tails the tool\'s local store. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>, and <strong>Claude Code</strong> (fallback for its <code>~/.claude/projects</code> transcripts).' },
-  { badge: 'MCP + RULES', tone: '', label: 'Agent-driven', text: 'Save/restore run through the MCP tools, driven by an always-on global rules file. <strong>Antigravity</strong> (<code>~/.gemini/GEMINI.md</code>).' },
+  { badge: 'MCP + RULES', tone: '', label: 'Agent-driven', text: 'Say <strong>“continue”</strong> (or “start on this project”) and the agent calls <code>continue_here</code> for the open folder — attaching that project and restoring it — then saves via the MCP tools as you work, driven by an always-on rules file. Works in any MCP tool. <strong>Antigravity</strong> (<code>~/.gemini/GEMINI.md</code>), <strong>Claude Desktop</strong>.' },
   { badge: 'CLI', tone: '', label: 'Manual inject', text: '<code>devmemory inject</code> writes context to <code>CLAUDE.md</code> / rules files on demand.' },
 ];
 

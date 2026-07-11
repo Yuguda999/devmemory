@@ -65,8 +65,8 @@
       <p>It captures work three ways depending on the tool:</p>
       <ul>
         <li><strong>Transcript hooks</strong> — Claude Code and Windsurf fire an OS hook that hands over a plaintext transcript; a small script POSTs each turn.</li>
-        <li><strong>Watch daemon</strong> — Cursor, Cline, Kilo and Codex persist conversations locally; <code>devmemory start</code> tails those stores.</li>
-        <li><strong>MCP + rules</strong> — where no verified hook exists (Antigravity), an always-on rules file drives save/restore through the MCP tools.</li>
+        <li><strong>Watch daemon</strong> — Claude Code, Cursor, Cline, Kilo and Codex persist conversations locally; <code>devmemory start</code> tails those stores.</li>
+        <li><strong>MCP + rules</strong> — in any MCP tool (Antigravity, Claude Desktop, or any of the above), just say <strong>“continue”</strong> and the agent attaches the open project and restores it via <code>continue_here</code>, then saves as you work. No CLI required.</li>
       </ul>
 
       <h2 id="install">Installation</h2>
@@ -88,6 +88,12 @@
 
       <h2 id="attach">The attach model</h2>
       <p>Auto-save is <strong>opt-in and scoped to one project at a time</strong>. Nothing is saved until you attach — no background daemon quietly recording every repo you touch.</p>
+      <p><strong>Two ways to attach, same result:</strong></p>
+      <ul>
+        <li><strong>In the tool</strong> — just say <strong>“continue”</strong> (or “start on this project”). The agent calls <code>continue_here</code> for the folder you have open, attaching that project and restoring its context. Works in any MCP-connected tool; no terminal needed.</li>
+        <li><strong>From a terminal</strong> — run <code>devmemory start</code> in the project folder. Best for the store-tailing tools, since it also launches the watch daemon.</li>
+      </ul>
+      <p>The CLI commands:</p>
       <ul>
         <li><code>devmemory start</code> — attach the current project (resolved from its git remote), restore its saved context, and begin auto-saving. Runs until you stop; long idle gaps are fine.</li>
         <li><code>devmemory continue</code> — re-attach the active project to a <em>new</em> tool, restore its context there, and resume saving from that tool.</li>
@@ -121,7 +127,7 @@
       <h2 id="mcp">MCP tools</h2>
       <p>Once connected, your AI tool can call these directly. The one you'll use most:</p>
       <ul>
-        <li><code>continue_here</code> — attach this project <em>and</em> load its context in one call. Trigger it by saying "continue" or "pick up where we left off".</li>
+        <li><code>continue_here</code> — attach this project <em>and</em> load its context in one call, for the folder you have open. Trigger it by saying "continue", "start on this project", or "pick up where we left off". The project is picked from the open folder automatically; to target a different one, tell the agent its name.</li>
         <li><code>save_context</code> — save a typed block (goal, decision, code, error, next_step, note).</li>
         <li><code>get_context</code> — retrieve saved blocks for the project or session.</li>
         <li><code>generate_resume_prompt</code> — build a "continue here" prompt tuned for a target tool.</li>

@@ -249,16 +249,28 @@ def _add_augment_hook(config: dict) -> dict:
 _DEVMEMORY_RULES_CONTENT = """\
 # DevMemory — Persistent Dev Memory
 
-You have access to DevMemory MCP tools. Use them proactively throughout every session:
+You have access to DevMemory MCP tools. They keep the user's work context alive
+across tool switches and credit resets. Use them proactively — do NOT wait to be asked.
 
-- **SESSION START**: Call `get_context` (or `generate_resume_prompt`) to restore prior context.
-- **AFTER EVERY CODE CHANGE**: Call `save_context` with block_type='code' summarising what changed.
-- **AFTER EVERY KEY DECISION**: Call `save_context` with block_type='decision'.
-- **ON EVERY ERROR**: Call `save_context` with block_type='error'.
-- **BEFORE ENDING**: Call `save_context` with block_type='next_step' so work can resume elsewhere.
+Every DevMemory tool takes a `cwd` argument that picks WHICH PROJECT you act on.
+**Always pass the absolute path of the project folder currently open in this tool.**
+That folder IS the project — DevMemory resolves it (git remote or folder name)
+automatically, so the user never has to name a project.
+
+- **WHEN THE USER SAYS "start", "continue", "resume", or "pick up where we left off"**
+  (or at the start of any session on an existing project): call **`continue_here`**
+  with `cwd` = the open project folder. ONE call attaches auto-save to this project
+  AND returns the prior context to read. Prefer it over `get_context` — nothing is
+  saved until a project is attached this way.
+- **AFTER EVERY CODE CHANGE**: `save_context` block_type='code' (with the same `cwd`).
+- **AFTER EVERY KEY DECISION**: `save_context` block_type='decision'.
+- **ON EVERY ERROR**: `save_context` block_type='error'.
+- **BEFORE ENDING**: `save_context` block_type='next_step' so work can resume elsewhere.
+
+If the user wants a different project than the open folder, pass `project="<name>"`
+explicitly. To see what exists, call `list_projects`.
 
 This ensures context survives when the user switches AI tools or runs out of credits.
-Do NOT wait to be asked — save context automatically after every meaningful action.
 """
 
 

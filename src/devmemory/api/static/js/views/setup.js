@@ -106,12 +106,12 @@ export async function renderSetup(container) {
               <div class="step-line"></div>
             </div>
             <div class="step-body">
-              <div class="step-title">Start a session in your project</div>
+              <div class="step-title">Attach the project you're working on</div>
               <div class="step-code">
                 <code>devmemory start</code>
                 <button class="code-copy-btn" data-copy="devmemory start">${icon('copy', 13)}</button>
               </div>
-              <div class="step-alt">Run inside the project you're working on. DevMemory attaches to <strong>that one project</strong>, restores its saved context, and auto-saves as you work — nothing is saved until you start. Runs as long as you're coding; idle gaps are fine.</div>
+              <div class="step-alt">Run inside the project you're working on. DevMemory attaches to <strong>that one project</strong>, restores its saved context, and auto-saves as you work — nothing is saved until you attach. Runs as long as you're coding; idle gaps are fine.<br><strong>Or skip the terminal:</strong> in the tool itself, just say <strong>“continue”</strong> (or “start on this project”) — the agent attaches the open folder's project and restores it via <code>continue_here</code>. Works in every connected tool.</div>
             </div>
           </div>
 
@@ -187,7 +187,7 @@ export async function renderSetup(container) {
         </div>
 
         <div class="step-alt" style="margin-bottom:14px">
-          <strong>Opt-in, one project at a time.</strong> Auto-save is scoped to the project you attach with <code>devmemory start</code> — nothing is saved until you do. Move to another tool with <code>devmemory continue</code>, end with <code>devmemory stop</code>, check state with <code>devmemory status</code>. The mechanisms below are <em>how</em> each tool captures turns once attached.
+          <strong>Opt-in, one project at a time.</strong> Attach a project either from the terminal (<code>devmemory start</code>) or by saying <strong>“continue”</strong> in the tool itself (the agent attaches the open folder via <code>continue_here</code>) — nothing is saved until you attach. Move to another tool with <code>devmemory continue</code> or just say “continue” there, end with <code>devmemory stop</code>, check state with <code>devmemory status</code>. The mechanisms below are <em>how</em> each tool captures turns once attached.
         </div>
 
         <div class="sync-methods">
@@ -203,14 +203,14 @@ export async function renderSetup(container) {
               <span class="sync-badge auto">WATCH</span>
               Watch daemon
             </div>
-            <div class="step-alt">For tools with no hook, <code>devmemory start</code> launches a background daemon that tails the tool's local store. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>. Run <code>devmemory watch --list</code> to see what's detected.</div>
+            <div class="step-alt">For tools with no hook, <code>devmemory start</code> launches a background daemon that tails the tool's local store. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>, and <strong>Claude Code</strong> (fallback via <code>~/.claude/projects</code>). Run <code>devmemory watch --list</code> to see what's detected.</div>
           </div>
           <div class="sync-method">
             <div class="sync-method-label">
               <span class="sync-badge">MCP + RULES</span>
               Agent-driven
             </div>
-            <div class="step-alt">Save/restore run through the MCP tools, driven by an always-on global rules file. Used where the IDE exposes no verified per-turn hook. <strong>Antigravity</strong> (<code>~/.gemini/GEMINI.md</code>).</div>
+            <div class="step-alt">Say <strong>“continue”</strong> (or “start on this project”) and the agent calls <code>continue_here</code> for the open folder — attaching that project and restoring it — then saves via the MCP tools as you work, driven by an always-on rules file. Works in any MCP tool. <strong>Antigravity</strong> (<code>~/.gemini/GEMINI.md</code>), <strong>Claude Desktop</strong>.</div>
           </div>
           <div class="sync-method">
             <div class="sync-method-label">

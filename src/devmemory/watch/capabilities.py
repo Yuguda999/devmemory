@@ -31,9 +31,11 @@ HOOK_TOOLS = [
 ]
 
 # Tools driven by the MCP tools + an always-on global rules file (agent-driven,
-# not deterministic). Used where the IDE exposes no verified per-turn hook.
+# not deterministic). Used where the IDE exposes no verified per-turn hook AND
+# there's no tailable local store — the watch daemon cannot save these.
 RULES_TOOLS = [
     ToolSupport("antigravity", "supported", "MCP tools + ~/.gemini/GEMINI.md global rules."),
+    ToolSupport("claude-desktop", "supported", "MCP tools only — save/recall on demand in chat."),
 ]
 
 # Tools captured by the watch DAEMON tailing their local store (no hook exists).
@@ -45,6 +47,27 @@ WATCH_TOOLS = [
     ToolSupport("codex", "supported", "state_*.sqlite threads + rollout JSONL."),
     ToolSupport("<generic>", "supported", "Any JSONL store via ~/.devmemory/watch_adapters.json."),
 ]
+
+
+# Save mode for the attach model (`devmemory start` / `continue`), by tool slug.
+#   "auto"  — a SAVE hook or the watch daemon persists the attached project with
+#             no further action: claude-code / cursor / cline / kilo / codex
+#             (daemon) and windsurf (its transcript hook saves each turn).
+#   "mcp"   — no save hook and no tailable store; saving happens ONLY when the
+#             agent calls save_context / continue_here in-chat: antigravity,
+#             claude-desktop, and augment (its only hook is SessionStart =
+#             restore, not save). The daemon cannot auto-save these.
+#   "unknown" — tool not passed / not recognised.
+_AUTO_TOOLS = {"claude-code", "cursor", "cline", "kilo", "codex", "windsurf"}
+_MCP_TOOLS = {"antigravity", "claude-desktop", "augment"}
+
+
+def save_mode(tool: str | None) -> str:
+    if tool in _AUTO_TOOLS:
+        return "auto"
+    if tool in _MCP_TOOLS:
+        return "mcp"
+    return "unknown"
 
 
 def render_status() -> str:

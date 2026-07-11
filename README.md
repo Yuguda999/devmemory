@@ -153,12 +153,19 @@ DevMemory saves three ways:
    covered here too (reading `~/.claude/projects/**/*.jsonl`) so the `devmemory
    start` attach model saves it even when the Stop hook isn't wired.
 
-3. **Tools with no verified hook (Antigravity) — MCP tools + rules.**
-   The Antigravity IDE exposes no per-turn transcript hook an installer can
-   reliably wire (its documented hooks are SDK decorators for SDK-built agents,
-   not the IDE). So `install` writes an always-on global rules file
-   (`~/.gemini/GEMINI.md`) that drives save/restore through the DevMemory MCP
+3. **Tools with no verified hook (Antigravity, Claude Desktop) — MCP tools + rules.**
+   These IDEs expose no per-turn transcript hook an installer can reliably wire
+   (Antigravity's documented hooks are SDK decorators for SDK-built agents, not
+   the IDE). So `install` writes an always-on global rules file (e.g.
+   `~/.gemini/GEMINI.md`) that drives save/restore through the DevMemory MCP
    tools. Agent-driven, not deterministic — but honest.
+
+**Attaching works the same everywhere.** However a tool saves, you pick the
+project the same way: either run `devmemory start` in the folder, or — in *any*
+MCP-connected tool — just say **"continue"** (or "start on this project"). The
+agent calls `continue_here` for the folder you have open, which attaches that
+project and restores its context. The project is resolved from the open folder's
+git remote or name; to target a different one, tell the agent its name.
 
 Check what's supported and detected on your machine:
 
