@@ -71,13 +71,8 @@
 
       <h2 id="install">Installation</h2>
       <p>Pick whichever fits your setup — none of these require you to create a virtual environment by hand.</p>
-      <div class="code"><button class="copy-btn" data-copy="npx -y @commanderzero/devmemory --help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><pre><span class="tok-c"># Node — nothing to install (recommended, no Python needed)</span>
-<span class="tok-k">npx</span> -y @commanderzero/devmemory --help</pre></div>
-      <div class="code"><button class="copy-btn" data-copy="pipx install devmemory-ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><pre><span class="tok-c"># Python — pipx manages an isolated environment for you</span>
-<span class="tok-k">pipx install</span> devmemory-ai
-<span class="tok-c"># or, with uv:</span>
-<span class="tok-k">uv tool install</span> devmemory-ai</pre></div>
-      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Plain <code>pip install devmemory-ai</code> also works, but on modern Debian/Ubuntu (PEP 668) it errors unless you're in a virtual environment — use <strong>pipx</strong>, <strong>uv</strong>, or <strong>npx</strong> to skip that.</p></div>
+      <div id="docs-install"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Prefer the top options: <strong>npx</strong>, <strong>pipx</strong>, or <strong>uv</strong> need no virtual environment. Plain <code>pip install</code> errors on modern Debian/Ubuntu (PEP 668) unless you're inside a venv.</p></div>
 
       <h2 id="quickstart">Quick start</h2>
       <p>Get running in under a minute:</p>
@@ -117,21 +112,11 @@
       </table></div>
 
       <h2 id="tools">Supported tools</h2>
-      <p>DevMemory never fakes support. Each tool is captured by a real, verified mechanism:</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Tool</th><th>Mechanism</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>Claude Code</td><td><code>Stop</code> hook (transcript)</td><td><span class="ok">✔ deterministic</span></td></tr>
-          <tr><td>Windsurf</td><td><code>post_cascade_response_with_transcript</code> hook + <code>global_rules.md</code></td><td><span class="ok">✔ deterministic</span></td></tr>
-          <tr><td>Cursor</td><td>watch daemon (SQLite store)</td><td><span class="ok">✔ verified</span></td></tr>
-          <tr><td>Cline / Kilo</td><td>watch daemon (JSON task history)</td><td><span class="ok">✔ supported</span></td></tr>
-          <tr><td>Codex</td><td>watch daemon (<code>state_*.sqlite</code> + rollout JSONL)</td><td><span class="ok">✔ supported</span></td></tr>
-          <tr><td>Antigravity</td><td>MCP tools + <code>~/.gemini/GEMINI.md</code> rules</td><td><span class="ok">✔ agent-driven</span></td></tr>
-          <tr><td>Augment</td><td>SessionStart hook (restore) + MCP save</td><td><span class="ok">✔ supported</span></td></tr>
-          <tr><td>any JSONL tool</td><td>generic adapter (<code>~/.devmemory/watch_adapters.json</code>)</td><td><span class="ok">✔ config-driven</span></td></tr>
-        </tbody>
-      </table></div>
-      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Windsurf and Antigravity encrypt conversations on disk. DevMemory doesn't try to crack that — Windsurf hands its hook a plaintext transcript, and Antigravity saves through the MCP tools + a rules file.</p></div>
+      <p>DevMemory never fakes support. Each tool is captured by a real, verified mechanism. There are four ways context gets saved:</p>
+      <div id="docs-mechanisms"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <p>Per-tool summary (same data drives the in-app <a class="link" href="/app#setup">Setup guide</a>, which also shows exact config snippets):</p>
+      <div id="docs-tools"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Windsurf and Antigravity encrypt conversations on disk. DevMemory doesn't try to crack that — Windsurf hands its hook a plaintext transcript, and Antigravity saves through the MCP tools + a rules file. Run <code>devmemory watch --list</code> to see the exact mechanism + detected stores on your machine.</p></div>
 
       <h2 id="mcp">MCP tools</h2>
       <p>Once connected, your AI tool can call these directly. The one you'll use most:</p>
@@ -183,6 +168,7 @@
     </div>
   </footer>
 
+  <script type="module" src="/static/js/docs.js"></script>
   <script src="/static/js/site.js"></script>
 </body>
 </html>
