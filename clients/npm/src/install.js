@@ -6,6 +6,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
 
+import { writeConfig } from "./store.js";
+
 const HOME = homedir();
 const APPDATA = process.env.APPDATA || join(HOME, "AppData", "Roaming");
 
@@ -154,6 +156,10 @@ export function runInstall({ tool, apiKey, host }) {
     console.error("❌ API key required. Use --api-key dm_key_...");
     process.exit(1);
   }
+  // Persist backend + key globally so `devmemory start/continue/inject` reach
+  // the right backend without re-passing flags (same config.json the Python
+  // client reads).
+  writeConfig({ host, api_key: apiKey });
   const slugs = tool === "all" ? TOOL_SLUGS : [tool];
   let wrote = 0;
   for (const slug of slugs) {

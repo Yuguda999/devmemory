@@ -17,6 +17,11 @@ DevMemory uses [Semantic Versioning](https://semver.org/).
   `~/.devmemory/active.json` consulted by both the watch daemon and the hooks.
 - **`continue_here` MCP tool** — attaches the current project and returns its
   resume prompt in one call (trigger it by saying "continue"/"resume").
+- **npm/Node client parity** — `start`/`continue`/`stop`/`status` now work from
+  the Node client too (`npx @commanderzero/devmemory start`). It reads/writes the
+  same `~/.devmemory/config.json` + `active.json` as the Python client, so a
+  session attached from either is honored by both. The watch daemon stays
+  Python-only; the Node client prints how to run it.
 - **Global config** — `~/.devmemory/config.json` persists `{host, api_key}` so
   `start`/`continue`/`inject` reach the right backend without re-passing flags.
   Written by `install`/`start`/`continue`; resolution order is
