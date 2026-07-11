@@ -164,7 +164,7 @@ async def get_resume_prompt(
                 "prompt": None,
                 "message": (
                     f"No active session found for project '{proj_info.name}'. "
-                    "Start one with devmemory start_session."
+                    "Start one with `devmemory start`."
                 ),
             }
 
