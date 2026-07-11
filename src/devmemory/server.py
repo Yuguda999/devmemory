@@ -155,6 +155,21 @@ def run() -> None:
         help="Install + start watch as a background service (systemd/launchd), then exit",
     )
 
+    # ── devmemory start / continue / stop / status ─────────────────────────
+    # The attach model: auto-save is scoped to one chosen project at a time.
+    for name, help_text in (
+        ("start", "Attach this tool to a project, restore its context, begin auto-saving"),
+        ("continue", "Re-attach the active project to a new tool and resume auto-saving"),
+    ):
+        p = subparsers.add_parser(name, help=help_text)
+        p.add_argument("--cwd", default=None, help="Project directory (default: current)")
+        p.add_argument("--tool", default=None, help="Tool being attached (e.g. cursor, claude)")
+        p.add_argument("--host", default=None, help="Backend URL (persisted to config)")
+        p.add_argument("--api-key", dest="api_key", default=None, help="API key (persisted)")
+
+    subparsers.add_parser("stop", help="Detach (stop auto-saving) and stop the watch daemon")
+    subparsers.add_parser("status", help="Show the active session and watch-daemon state")
+
     # ── Legacy flags (no subcommand = MCP or REST) ─────────────────────────
     parser.add_argument(
         "--rest",
@@ -204,6 +219,15 @@ def run() -> None:
         from devmemory.watch.daemon import run as run_watch
 
         _sys.exit(run_watch(interval=args.interval, once=args.once))
+    elif args.command in ("start", "continue", "stop", "status"):
+        from devmemory.cli import session
+
+        {
+            "start": session.run_start,
+            "continue": session.run_continue,
+            "stop": session.run_stop,
+            "status": session.run_status,
+        }[args.command](args)
     elif args.rest:
         run_rest(host=args.host, port=args.port)
     else:

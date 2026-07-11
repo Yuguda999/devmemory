@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import time
 
+from devmemory.hooks._common import read_active, should_save
 from devmemory.watch.adapters import Adapter, available_adapters
 from devmemory.watch.client import Client, api_key
 from devmemory.watch.models import Conversation, Message
@@ -80,6 +81,12 @@ def _process(conv: Conversation, state: WatchState, client: Client) -> int:
     if project is None:
         return 0
 
+    # Strict opt-in: only the project the user attached with `devmemory start`
+    # is saved. Everything else is skipped (watermark left untouched, so it saves
+    # correctly once/if that project becomes the active one).
+    if not should_save(project["slug"]):
+        return 0
+
     session_id = state.session_id(conv.key())
     saved = 0
     for block in blocks:
@@ -132,8 +139,22 @@ def run(interval: int = DEFAULT_INTERVAL, once: bool = False) -> int:
     _log(f"watching: {', '.join(a.name for a in adapters)} (interval {interval}s)")
     state = WatchState()
     client = Client(key)
+    warned_idle = False
     try:
         while True:
+            active = read_active()
+            if active is None:
+                # No attached session — save nothing until `devmemory start`.
+                if not warned_idle:
+                    _log("no active session — run `devmemory start` in a project to begin saving.")
+                    warned_idle = True
+                if once:
+                    break
+                time.sleep(interval)
+                continue
+            if warned_idle:
+                _log(f"active session: {active['name']} ({active['slug']}) — saving.")
+                warned_idle = False
             saved = poll_once(adapters, state, client)
             if saved:
                 _log(f"saved {saved} new block(s)")

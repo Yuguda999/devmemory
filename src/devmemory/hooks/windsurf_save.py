@@ -23,7 +23,14 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import api_key, http_post, log, read_stdin_json, resolve_project  # noqa: E402
+from _common import (  # noqa: E402
+    api_key,
+    http_post,
+    log,
+    read_stdin_json,
+    resolve_project,
+    should_save,
+)
 
 USER_CAP = 1500
 ASSISTANT_CAP = 3000
@@ -95,12 +102,17 @@ def main() -> int:
         log("windsurf_save", {"stage": "abort", "reason": "no assistant text in turn"})
         return 0
 
+    proj = resolve_project(cwd)
+    if not should_save(proj["slug"]):
+        log("windsurf_save", {"stage": "skip", "reason": "project not active", "slug": proj["slug"]})
+        return 0
+
     content = (
         f"[windsurf] User asked:\n{user_text[:USER_CAP]}\n\n"
         f"Assistant response:\n{assistant_text[:ASSISTANT_CAP]}"
     )
     body = {
-        "project": resolve_project(cwd),
+        "project": proj,
         "block_type": "note",
         "content": content,
         "session_id": None,

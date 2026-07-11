@@ -695,6 +695,13 @@ def run_install(args) -> None:
 
     host = args.host if hasattr(args, "host") else None
 
+    # Persist host + key globally so `devmemory start/continue/inject` reach the
+    # right backend without re-passing flags (fixes the localhost fallback).
+    from devmemory.hooks._common import write_config
+
+    save_api_key(api_key)
+    write_config(host=host, api_key=api_key)
+
     if args.tool == "all":
         result = install_all(api_key, host=host)
     else:

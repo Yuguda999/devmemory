@@ -18,20 +18,123 @@ from pathlib import Path
 
 DEFAULT_HOST = "https://devmemory.onrender.com"
 
+# One global config so every command (start/continue/inject/watch/install) knows
+# the backend URL + key without re-passing flags or setting env vars. Resolution
+# order is always: explicit arg → env var → this file → built-in default.
+CONFIG_PATH = Path.home() / ".devmemory" / "config.json"
+
+
+def read_config() -> dict:
+    """Return the persisted config, or {} if none / unreadable."""
+    try:
+        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_config(**kv) -> dict:
+    """Merge the given keys into the config file (None values ignored)."""
+    cfg = read_config()
+    cfg.update({k: v for k, v in kv.items() if v is not None})
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CONFIG_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(CONFIG_PATH)
+    return cfg
+
 
 def host() -> str:
-    return (os.environ.get("DEVMEMORY_HOST") or DEFAULT_HOST).rstrip("/")
+    """Resolve backend URL: env → config.json → default."""
+    h = os.environ.get("DEVMEMORY_HOST") or read_config().get("host") or DEFAULT_HOST
+    return h.rstrip("/")
 
 
 def api_key() -> str | None:
+    """Resolve API key: env → ~/.devmemory/api_key → config.json."""
     key = os.environ.get("DEVMEMORY_API_KEY")
     if key:
         return key.strip()
     key_file = Path.home() / ".devmemory" / "api_key"
     try:
-        return key_file.read_text(encoding="utf-8").strip() or None
+        file_key = key_file.read_text(encoding="utf-8").strip()
+        if file_key:
+            return file_key
     except OSError:
+        pass
+    return read_config().get("api_key") or None
+
+
+# ── Active-session marker ──────────────────────────────────────────────────────
+#
+# One global marker names the single project auto-save is currently attached to.
+# Both the watch daemon and the deterministic hooks consult it, so auto-save is
+# strictly opt-in: nothing is saved until the user runs ``devmemory start``.
+# ``devmemory continue`` re-points the marker at a new tool (same project);
+# ``devmemory stop`` clears it. Kept here (stdlib-only, copied alongside the
+# hooks) so hook scripts and the daemon share one implementation.
+
+ACTIVE_PATH = Path.home() / ".devmemory" / "active.json"
+
+
+def read_active() -> dict | None:
+    """Return the active-session marker, or None if no session is active."""
+    try:
+        data = json.loads(ACTIVE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return None
+    return data if isinstance(data, dict) and data.get("slug") else None
+
+
+def write_active(project: dict, tool: str) -> dict:
+    """Point the active session at ``project``, attached to ``tool``.
+
+    Preserves ``started_at`` when the same project is already active, so a
+    ``continue`` to a new tool keeps the original session start time.
+    """
+    import datetime
+
+    current = read_active()
+    if current and current.get("slug") == project.get("slug"):
+        started = current.get("started_at")
+    else:
+        started = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    marker = {
+        "slug": project.get("slug"),
+        "name": project.get("name"),
+        "remote_url": project.get("remote_url"),
+        "tool": tool,
+        "started_at": started,
+    }
+    ACTIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ACTIVE_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(ACTIVE_PATH)
+    return marker
+
+
+def set_active_tool(tool: str) -> dict | None:
+    """Re-point the current active session at ``tool``. No-op if none active."""
+    current = read_active()
+    if current is None:
+        return None
+    return write_active(current, tool)
+
+
+def clear_active() -> None:
+    import contextlib
+
+    with contextlib.suppress(OSError):
+        ACTIVE_PATH.unlink()
+
+
+def should_save(slug: str) -> bool:
+    """Strict opt-in gate: only save when ``slug`` is the active project.
+
+    No active marker → False (nothing is saved until ``devmemory start``).
+    """
+    active = read_active()
+    return bool(active and active.get("slug") == slug)
 
 
 # ── Project slug resolution (ported from devmemory.resolver.git_resolver) ──────

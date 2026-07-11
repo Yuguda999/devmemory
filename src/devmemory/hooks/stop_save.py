@@ -15,7 +15,14 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import api_key, http_post, log, read_stdin_json, resolve_project  # noqa: E402
+from _common import (  # noqa: E402
+    api_key,
+    http_post,
+    log,
+    read_stdin_json,
+    resolve_project,
+    should_save,
+)
 
 USER_CAP = 1200
 ASSISTANT_CAP = 2500
@@ -135,6 +142,9 @@ def main() -> int:
     )
 
     proj = resolve_project(cwd)
+    if not should_save(proj["slug"]):
+        log("stop_save", {"stage": "skip", "reason": "project not active", "slug": proj["slug"]})
+        return 0
     body = {
         "project": proj,
         "block_type": "note",

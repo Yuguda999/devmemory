@@ -147,9 +147,12 @@ def run_inject(args) -> None:
     """Handle the 'devmemory inject' subcommand."""
     cwd = getattr(args, "cwd", None) or os.getcwd()
     tool = getattr(args, "tool", "generic") or "generic"
-    host = getattr(args, "host", None) or os.environ.get("DEVMEMORY_HOST", "http://localhost:8765")
+    from devmemory.hooks._common import api_key as resolve_api_key
+    from devmemory.hooks._common import host as resolve_host
 
-    api_key = getattr(args, "api_key", None) or load_api_key()
+    host = getattr(args, "host", None) or resolve_host()
+
+    api_key = getattr(args, "api_key", None) or load_api_key() or resolve_api_key()
     if not api_key:
         # Silent failure — don't break tool startup
         print("ℹ️  devmemory inject: No API key found. Skipping.", file=sys.stderr)
