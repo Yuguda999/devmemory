@@ -454,3 +454,54 @@ class TestPickKey:
         monkeypatch.delenv("DEVMEMORY_API_KEY", raising=False)
         with pytest.raises(ValueError, match="DEVMEMORY_API_KEY"):
             _pick_key(None)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# continue_here — attach + restore in one call
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestContinueHere:
+    async def test_attaches_and_returns_prompt(self, tmp_path, monkeypatch):
+        from devmemory.hooks import _common
+        from devmemory.tools import continue_here
+
+        monkeypatch.setattr(_common, "ACTIVE_PATH", tmp_path / "active.json")
+        api = AsyncMock(
+            side_effect=[
+                {"ok": True, "sessions": [{"id": "s9"}], "count": 1},
+                {"ok": True, "has_context": True, "prompt": "RESUME TEXT"},
+            ]
+        )
+        proj = _proj(slug="acme-widget", name="widget", remote_url="git@github.com:acme/widget.git")
+        with patch(_RESOLVE_PROJ, AsyncMock(return_value=proj)), patch(_API, api):
+            result = await continue_here(cwd="/x", tool_source="cursor")
+
+        assert result["ok"] is True
+        assert result["attached"] is True
+        assert result["has_context"] is True
+        assert result["prompt"] == "RESUME TEXT"
+        assert result["session_id"] == "s9"
+        # Marker written → background auto-save now scoped to this project.
+        assert _common.should_save("acme-widget") is True
+        assert api.call_args_list[0].args[:2] == ("GET", "/sessions")
+        assert api.call_args_list[1].args[:2] == ("GET", "/sessions/s9/resume")
+
+    async def test_no_prior_session_still_attaches(self, tmp_path, monkeypatch):
+        from devmemory.hooks import _common
+        from devmemory.tools import continue_here
+
+        monkeypatch.setattr(_common, "ACTIVE_PATH", tmp_path / "active.json")
+        api = AsyncMock(return_value={"ok": True, "sessions": [], "count": 0})
+        with (
+            patch(_RESOLVE_PROJ, AsyncMock(return_value=_proj(slug="p", name="p"))),
+            patch(_API, api),
+        ):
+            result = await continue_here(cwd="/x", tool_source="claude")
+
+        assert result["ok"] is True
+        assert result["attached"] is True
+        assert result["has_context"] is False
+        assert "prompt" not in result
+        assert _common.should_save("p") is True
+        assert api.call_count == 1  # no resume fetch when there's no session

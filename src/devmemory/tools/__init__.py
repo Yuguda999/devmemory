@@ -68,10 +68,14 @@ mcp = FastMCP(
         '- BEFORE STARTING each task: call update_task(block_id, "in_progress").\n'
         '- AFTER COMPLETING each task: call update_task(block_id, "done").\n'
         "\n"
+        "### When to call continue_here:\n"
+        "- When the user says 'continue', 'resume', 'pick up where we left off', or switches\n"
+        "  into this tool and wants prior context. ONE call attaches auto-save to this project\n"
+        "  AND returns the resume prompt. Prefer it over get_context/generate_resume_prompt for\n"
+        "  restoring, because auto-save saves nothing until a project is attached.\n"
+        "\n"
         "### When to call get_context or generate_resume_prompt:\n"
-        "- At the start of a session to restore prior work "
-        "(check for existing context before starting).\n"
-        "- When the user says 'continue', 'resume', 'pick up where we left off', or similar.\n"
+        "- At the start of a session to inspect prior work without attaching.\n"
         "\n"
         "### Authentication:\n"
         "Use the api_key argument or the DEVMEMORY_API_KEY environment variable.\n"
@@ -417,6 +421,89 @@ async def generate_resume_prompt(
     return await _api(
         "GET", f"/sessions/{session_id}/resume", api_key, params={"target_tool": target_tool}
     )
+
+
+# ── Tool: continue_here ──────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def continue_here(
+    cwd: str,
+    tool_source: str = "unknown",
+    api_key: str | None = None,
+) -> dict:
+    """Attach DevMemory auto-save to THIS project and load its saved context.
+
+    Call this when the user switches into this tool and says "continue", "resume",
+    "pick up where we left off", or otherwise wants their prior context here.
+
+    Two things happen:
+    1. **Attach** — the current project becomes the active session, so background
+       auto-save (watch daemon + deterministic hooks) is scoped to it. Auto-save
+       is strictly opt-in: it saves nothing until a project is attached this way
+       or via ``devmemory start``.
+    2. **Restore** — the latest session's context is returned as a ``prompt`` you
+       should read to continue seamlessly.
+
+    Args:
+        cwd:         Working directory — resolved locally to a project.
+        tool_source: The AI tool being attached (e.g. "claude", "cursor").
+        api_key:     DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+    """
+    proj = await resolve_project_slug(cwd)
+
+    # Attach: write the local marker so background auto-save scopes to this
+    # project. Best-effort — a failure here must not block the restore.
+    attached = False
+    try:
+        from devmemory.hooks._common import write_active
+
+        write_active(
+            {"slug": proj.slug, "name": proj.name, "remote_url": proj.remote_url}, tool_source
+        )
+        attached = True
+    except Exception:  # noqa: BLE001 — marker is best-effort
+        attached = False
+
+    sess = await _api(
+        "GET",
+        "/sessions",
+        api_key,
+        params={"project_slug": proj.slug, "status": "active", "limit": 1},
+    )
+    if sess.get("ok") is False:
+        return sess
+    sessions = sess.get("sessions", [])
+    if not sessions:
+        return {
+            "ok": True,
+            "attached": attached,
+            "project": proj.name,
+            "has_context": False,
+            "message": (
+                f"Attached to '{proj.name}' — auto-save is now scoped to this project. "
+                "No prior session to restore; starting fresh."
+            ),
+        }
+
+    session_id = sessions[0].get("id")
+    resume = await _api(
+        "GET", f"/sessions/{session_id}/resume", api_key, params={"target_tool": tool_source}
+    )
+    if resume.get("ok") is False:
+        return resume
+    return {
+        "ok": True,
+        "attached": attached,
+        "project": proj.name,
+        "session_id": session_id,
+        "has_context": resume.get("has_context", True),
+        "prompt": resume.get("prompt"),
+        "message": (
+            f"Attached to '{proj.name}' and loaded prior context. "
+            "Read the prompt below to continue where you left off."
+        ),
+    }
 
 
 # ── Tool: list_projects ────────────────────────────────────────────────────────
