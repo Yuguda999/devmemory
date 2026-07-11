@@ -7,6 +7,29 @@ DevMemory uses [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] — 2026-07-11
+
+### Fixed
+- **Claude Code installs now honor `CLAUDE_CONFIG_DIR`.** The installer wrote the
+  MCP server entry to `~/.claude.json` and the hooks to `~/.claude/settings.json`
+  unconditionally. Users who run Claude Code with `CLAUDE_CONFIG_DIR` set have
+  their config at `<dir>/.claude.json` and `<dir>/settings.json`, so DevMemory
+  wrote to files Claude never reads — the MCP server and hooks silently never
+  loaded. Both the Python and npm installers now resolve the correct location.
+  Default installs (env var unset) are unchanged.
+
+### Added
+- **`devmemory mcp` subcommand** — explicit verb to start the MCP stdio server.
+  The installer now launches the server as `devmemory mcp` so the Python and npm
+  channels use an identical command; bare `devmemory` still starts the server for
+  backward compatibility with existing configs.
+- **`devmemory install --config-dir <dir[,dir…]>`** — target one or more specific
+  Claude Code profile directories in a single run (overrides `CLAUDE_CONFIG_DIR`).
+  Comma-separated `CLAUDE_CONFIG_DIR` is also honored: each listed profile gets
+  its own install of the MCP server and hooks.
+
+---
+
 ## [0.2.0] — 2026-07-11
 
 ### Added

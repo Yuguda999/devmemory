@@ -91,6 +91,17 @@ def run() -> None:
         help="DevMemory REST server URL (for SaaS: https://api.devmemory.io)",
     )
     install_parser.add_argument(
+        "--config-dir",
+        dest="config_dir",
+        default=None,
+        help=(
+            "Claude Code only: target profile dir(s) to install into, "
+            "comma-separated for multiple (e.g. ~/.claude-work,~/.claude-personal). "
+            "Overrides CLAUDE_CONFIG_DIR. Omit to use CLAUDE_CONFIG_DIR or the "
+            "default ~/.claude.json."
+        ),
+    )
+    install_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be written without making changes",
@@ -169,6 +180,7 @@ def run() -> None:
 
     subparsers.add_parser("stop", help="Detach (stop auto-saving) and stop the watch daemon")
     subparsers.add_parser("status", help="Show the active session and watch-daemon state")
+    subparsers.add_parser("mcp", help="Start the MCP server (stdio transport)")
 
     # ── Legacy flags (no subcommand = MCP or REST) ─────────────────────────
     parser.add_argument(
@@ -228,6 +240,8 @@ def run() -> None:
             "stop": session.run_stop,
             "status": session.run_status,
         }[args.command](args)
+    elif args.command == "mcp":
+        run_mcp()
     elif args.rest:
         run_rest(host=args.host, port=args.port)
     else:

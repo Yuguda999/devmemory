@@ -47,6 +47,27 @@ def _appdata() -> str:
     return os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
 
 
+def _claude_config_dirs(explicit: str | None = None) -> list[Path]:
+    """Return the Claude Code config dirs to install into.
+
+    Claude Code honors the CLAUDE_CONFIG_DIR env var. When set, its config files
+    move OUT of the defaults (~/.claude.json and ~/.claude/settings.json) and
+    into <dir>/.claude.json and <dir>/settings.json. Installs that ignore this
+    write to files Claude never reads, so the MCP server and hooks silently never
+    load.
+
+    Both CLAUDE_CONFIG_DIR and the ``--config-dir`` flag may list several dirs,
+    comma-separated — a user with multiple profiles (e.g. ~/.claude-work,
+    ~/.claude-personal) gets one install per dir. ``explicit`` (from --config-dir)
+    wins over the env var. Returns [] when neither is set, meaning "use the
+    platform default (~/.claude.json)".
+    """
+    raw = explicit if explicit else os.environ.get("CLAUDE_CONFIG_DIR")
+    if not raw:
+        return []
+    return [Path(p.strip()).expanduser() for p in raw.split(",") if p.strip()]
+
+
 TOOLS: dict[str, ToolConfig] = {
     "claude-code": ToolConfig(
         name="Claude Code",
@@ -164,8 +185,13 @@ def _build_mcp_entry(api_key: str, client: str | None = None, host: str | None =
     if host:
         env["DEVMEMORY_HOST"] = host
 
+    # Pass the explicit "mcp" subcommand rather than relying on bare-invocation
+    # defaulting to the stdio server. Both install channels (this CLI and the npm
+    # client) now launch with the same verb, so a config written by one channel
+    # cannot silently fail against a binary installed by the other.
     return {
         "command": command,
+        "args": ["mcp"],
         "env": env,
     }
 
@@ -173,8 +199,22 @@ def _build_mcp_entry(api_key: str, client: str | None = None, host: str | None =
 # ── Config File Operations ────────────────────────────────────────────────────
 
 
-def _resolve_config_path(tool: ToolConfig) -> Path:
-    """Resolve the config file path for the current OS."""
+def _resolve_config_path(tool: ToolConfig, config_dir: Path | None = None) -> Path:
+    """Resolve the config file path for the current OS.
+
+    For claude-code, ``config_dir`` targets a specific Claude profile dir (so a
+    caller looping over several profiles can pin each one); when omitted, the
+    first CLAUDE_CONFIG_DIR entry is used, else the platform default.
+    """
+    # Claude Code relocates ~/.claude.json to $CLAUDE_CONFIG_DIR/.claude.json
+    # when that env var is set. Honor it so we write where Claude actually reads.
+    if tool.slug == "claude-code":
+        if config_dir is not None:
+            return config_dir / ".claude.json"
+        dirs = _claude_config_dirs()
+        if dirs:
+            return dirs[0] / ".claude.json"
+
     os_name = platform.system()
     template = tool.config_paths.get(os_name)
     if template is None:
@@ -372,8 +412,8 @@ def _copy_hook_scripts() -> Path:
     return dst
 
 
-def _add_claude_code_hooks(hooks_dir: Path) -> Path:
-    """Merge DevMemory SessionStart + Stop hooks into ~/.claude/settings.json.
+def _add_claude_code_hooks(hooks_dir: Path, config_dir: Path | None = None) -> Path:
+    """Merge DevMemory SessionStart + Stop hooks into Claude's settings.json.
 
     Idempotent and non-destructive: preserves any existing hooks (other tools',
     user's own) and only adds a DevMemory command if one isn't already present.
@@ -382,7 +422,14 @@ def _add_claude_code_hooks(hooks_dir: Path) -> Path:
     - Stop         → stop_save.py snapshots each turn (runs regardless of whether
                      the model called save_context, so nothing is ever lost).
     """
-    settings_path = Path.home() / ".claude" / "settings.json"
+    # Same CLAUDE_CONFIG_DIR relocation applies to settings.json: with the env
+    # var (or --config-dir) set it lives at <dir>/settings.json, not
+    # ~/.claude/settings.json. config_dir pins a specific profile when looping.
+    base = config_dir
+    if base is None:
+        dirs = _claude_config_dirs()
+        base = dirs[0] if dirs else None
+    settings_path = (base / "settings.json") if base else (Path.home() / ".claude" / "settings.json")
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
     config: dict = {}
@@ -564,8 +611,13 @@ def install_tool(
     api_key: str,
     host: str | None = None,
     dry_run: bool = False,
+    config_dir: Path | None = None,
 ) -> tuple[bool, str]:
     """Install DevMemory for a specific tool.
+
+    ``config_dir`` pins a specific Claude Code profile dir (used when looping
+    over several CLAUDE_CONFIG_DIR / --config-dir profiles); ignored by other
+    tools.
 
     Returns (success, message).
     """
@@ -574,7 +626,7 @@ def install_tool(
         valid = ", ".join(sorted(TOOLS.keys()))
         return False, f"Unknown tool '{tool_slug}'. Supported: {valid}"
 
-    config_path = _resolve_config_path(tool)
+    config_path = _resolve_config_path(tool, config_dir=config_dir)
     mcp_entry = _build_mcp_entry(api_key, client=tool.slug, host=host)
 
     if dry_run:
@@ -636,7 +688,7 @@ def install_tool(
         # hookSpecificOutput.additionalContext, and Stop POSTs each turn to the
         # API so nothing is lost even when the model never calls save_context.
         hooks_dir = _copy_hook_scripts()
-        settings_path = _add_claude_code_hooks(hooks_dir)
+        settings_path = _add_claude_code_hooks(hooks_dir, config_dir=config_dir)
         lines.append(f"   Hook scripts: {hooks_dir}")
         lines.append(f"   SessionStart + Stop hooks: wired into {settings_path}")
         lines.append(
@@ -714,8 +766,26 @@ def run_install(args) -> None:
     save_api_key(api_key)
     write_config(host=host, api_key=api_key)
 
+    explicit_dirs = getattr(args, "config_dir", None)
+
     if args.tool == "all":
         result = install_all(api_key, host=host)
+    elif args.tool == "claude-code":
+        # A user may run several Claude profiles via CLAUDE_CONFIG_DIR (or pass
+        # --config-dir a,b,c). Install into each so every profile gets the MCP
+        # server + hooks. Empty list → one default install (~/.claude.json).
+        dirs = _claude_config_dirs(explicit_dirs)
+        targets: list[Path | None] = dirs if dirs else [None]
+        results = []
+        for target in targets:
+            ok, result = install_tool(
+                args.tool, api_key, host=host, dry_run=args.dry_run, config_dir=target
+            )
+            if not ok:
+                print(f"❌ {result}", file=sys.stderr)
+                sys.exit(1)
+            results.append(result)
+        result = "\n\n".join(results)
     else:
         ok, result = install_tool(args.tool, api_key, host=host, dry_run=args.dry_run)
         if not ok:

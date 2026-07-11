@@ -25,7 +25,7 @@ function printHelp() {
 Usage:
   devmemory                                   Start the MCP server (stdio)
   devmemory mcp                               Start the MCP server (explicit)
-  devmemory install --tool <name>|--all --api-key <key> [--host <url>]
+  devmemory install --tool <name>|--all --api-key <key> [--host <url>] [--config-dir <dir[,dir...]>]
   devmemory start    [--cwd <dir>] [--tool <name>] [--host <url>] [--api-key <key>]
   devmemory continue [--cwd <dir>] [--tool <name>] [--host <url>] [--api-key <key>]
   devmemory stop
@@ -59,6 +59,7 @@ async function main() {
         tool: { type: "string" },
         "api-key": { type: "string" },
         host: { type: "string" },
+        "config-dir": { type: "string" },
         all: { type: "boolean" },
       },
       allowPositionals: false,
@@ -68,7 +69,12 @@ async function main() {
       console.error(`❌ Specify --tool <${TOOL_SLUGS.join("|")}> or --all`);
       process.exit(1);
     }
-    runInstall({ tool, apiKey: values["api-key"], host: values.host });
+    runInstall({
+      tool,
+      apiKey: values["api-key"],
+      host: values.host,
+      configDir: values["config-dir"],
+    });
     return;
   }
 

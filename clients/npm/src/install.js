@@ -18,6 +18,22 @@ function expand(p) {
     .replace(/%USERPROFILE%/g, HOME);
 }
 
+// Claude Code honors CLAUDE_CONFIG_DIR: when set, ~/.claude.json moves to
+// <dir>/.claude.json. Installs that ignore it write to a file Claude never
+// reads, so the MCP server silently never loads. Both CLAUDE_CONFIG_DIR and the
+// --config-dir flag may list several profile dirs, comma-separated — each gets
+// its own install. `explicit` (from --config-dir) wins over the env var.
+// Returns [] when neither is set, meaning "use the default ~/.claude.json".
+function claudeConfigDirs(explicit) {
+  const raw = explicit || process.env.CLAUDE_CONFIG_DIR;
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map(expand);
+}
+
 // slug → { name, paths per platform() key: 'linux' | 'darwin' | 'win32' }
 const TOOLS = {
   "claude-code": {
@@ -120,7 +136,14 @@ function mcpEntry(apiKey, host, client) {
   return { command: "npx", args: ["-y", "@commanderzero/devmemory", "mcp"], env };
 }
 
-function toolPath(tool) {
+function toolPath(tool, slug, configDir) {
+  // Claude Code relocates ~/.claude.json to $CLAUDE_CONFIG_DIR/.claude.json
+  // when set. Honor it so we write where Claude actually reads. configDir pins
+  // a specific profile when looping; else fall back to the first env dir.
+  if (slug === "claude-code") {
+    const base = configDir || claudeConfigDirs()[0];
+    if (base) return join(base, ".claude.json");
+  }
   const tmpl = tool.paths[platform()] || tool.paths.linux;
   return expand(tmpl);
 }
@@ -139,10 +162,10 @@ function readJsonConfig(path) {
 }
 
 /** Write/merge the devmemory MCP entry into one tool's config. Returns the path. */
-export function installTool(slug, apiKey, host) {
+export function installTool(slug, apiKey, host, configDir) {
   const tool = TOOLS[slug];
   if (!tool) throw new Error(`Unknown tool '${slug}'. Supported: ${TOOL_SLUGS.join(", ")}, all`);
-  const path = toolPath(tool);
+  const path = toolPath(tool, slug, configDir);
   const cfg = readJsonConfig(path);
   if (!cfg.mcpServers || typeof cfg.mcpServers !== "object") cfg.mcpServers = {};
   cfg.mcpServers.devmemory = mcpEntry(apiKey, host, slug);
@@ -151,7 +174,7 @@ export function installTool(slug, apiKey, host) {
   return path;
 }
 
-export function runInstall({ tool, apiKey, host }) {
+export function runInstall({ tool, apiKey, host, configDir }) {
   if (!apiKey) {
     console.error("❌ API key required. Use --api-key dm_key_...");
     process.exit(1);
@@ -168,11 +191,20 @@ export function runInstall({ tool, apiKey, host }) {
       console.error(`❌ Unknown tool '${slug}'. Supported: ${TOOL_SLUGS.join(", ")}, all`);
       process.exit(1);
     }
-    const path = toolPath(t);
-    // For --all, only configure tools that appear installed (their config dir exists).
-    if (tool === "all" && !t.alwaysAttempt && !existsSync(dirname(path))) continue;
-    installTool(slug, apiKey, host);
-    console.log(`✅ ${t.name}: configured → ${path}`);
+    // A user may run several Claude profiles via CLAUDE_CONFIG_DIR (or pass
+    // --config-dir a,b,c). Install into each; [null] means "the default path".
+    const dirs = slug === "claude-code" ? claudeConfigDirs(configDir) : [];
+    const targets = dirs.length ? dirs : [null];
+    let installedForSlug = false;
+    for (const target of targets) {
+      const path = toolPath(t, slug, target);
+      // For --all, only configure tools that appear installed (config dir exists).
+      if (tool === "all" && !t.alwaysAttempt && !existsSync(dirname(path))) continue;
+      installTool(slug, apiKey, host, target);
+      console.log(`✅ ${t.name}: configured → ${path}`);
+      installedForSlug = true;
+    }
+    if (!installedForSlug) continue;
     const rulesPath = installRules(slug);
     if (rulesPath) console.log(`   Rules: ${rulesPath} (auto-read every session)`);
     wrote++;

@@ -1,6 +1,6 @@
 {
   "name": "@commanderzero/devmemory",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DevMemory — persistent, cross-tool coding memory for AI agents (MCP client + CLI).",
   "type": "module",
   "bin": {
