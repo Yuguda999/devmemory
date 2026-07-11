@@ -22,7 +22,11 @@ class ToolSupport:
 # Tools captured by a HOOK the tool itself fires (transcript handed to us).
 # Deterministic, no watch daemon, no reading an encrypted store.
 HOOK_TOOLS = [
-    ToolSupport("claude-code", "supported", "SessionStart + Stop hooks (transcript)."),
+    ToolSupport(
+        "claude-code",
+        "supported",
+        "SessionStart + Stop hooks (transcript); watch daemon over ~/.claude/projects as fallback.",
+    ),
     ToolSupport("windsurf", "supported", "post_cascade_response_with_transcript hook (JSONL)."),
 ]
 
@@ -34,6 +38,7 @@ RULES_TOOLS = [
 
 # Tools captured by the watch DAEMON tailing their local store (no hook exists).
 WATCH_TOOLS = [
+    ToolSupport("claude-code", "supported", "~/.claude/projects/*/*.jsonl transcripts (hook fallback)."),
     ToolSupport("cursor", "supported", "SQLite store (cursorDiskKV) — verified."),
     ToolSupport("cline", "supported", "JSON task history (api_conversation_history.json)."),
     ToolSupport("kilo", "supported", "Cline fork — same JSON format, different extension id."),

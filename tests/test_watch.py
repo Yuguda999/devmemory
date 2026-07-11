@@ -6,6 +6,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from devmemory.watch.adapters.claude_code import ClaudeCodeAdapter
 from devmemory.watch.adapters.codex import CodexAdapter
 from devmemory.watch.adapters.cursor import CursorAdapter
 from devmemory.watch.adapters.generic import generic_adapters
@@ -201,6 +202,63 @@ def test_codex_adapter_reads_rollout(tmp_path: Path):
 
 def test_codex_adapter_missing(tmp_path: Path):
     adapter = CodexAdapter(state_db=tmp_path / "none.sqlite")
+    assert not adapter.available()
+    assert list(adapter.conversations()) == []
+
+
+# ── Claude Code adapter ───────────────────────────────────────────────────────
+
+
+def _make_claude(tmp_path: Path, cwd: str | None = None) -> Path:
+    # A real on-disk cwd so path-based project resolution behaves like production.
+    work = tmp_path / "proj"
+    work.mkdir()
+    cwd = cwd or str(work)
+    projects = tmp_path / "projects"
+    proj_dir = projects / "-proj"
+    proj_dir.mkdir(parents=True)
+    lines = [
+        {"type": "summary", "summary": "meta line, no message"},
+        {"type": "user", "cwd": cwd, "gitBranch": "main",
+         "message": {"role": "user", "content": "fix the bug"}},
+        {"type": "assistant", "cwd": cwd,
+         "message": {"role": "assistant", "content": [
+             {"type": "text", "text": "Fixed it."},
+             {"type": "tool_use", "name": "Edit", "input": {}},  # dropped
+         ]}},
+        # sidechain (sub-agent) turn — must be skipped
+        {"type": "assistant", "cwd": cwd, "isSidechain": True,
+         "message": {"role": "assistant", "content": [{"type": "text", "text": "sub-agent noise"}]}},
+        # tool_result user turn — no text block, contributes nothing
+        {"type": "user", "cwd": cwd,
+         "message": {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]}},
+    ]
+    (proj_dir / "session-abc.jsonl").write_text(
+        "\n".join(json.dumps(x) for x in lines), encoding="utf-8"
+    )
+    return projects
+
+
+def test_claude_code_adapter_reads_transcript(tmp_path: Path):
+    projects = _make_claude(tmp_path)
+    adapter = ClaudeCodeAdapter(projects_dir=projects)
+    assert adapter.available()
+
+    convs = list(adapter.conversations())
+    assert len(convs) == 1
+    conv = convs[0]
+    assert conv.tool == "claude-code"
+    assert [m.role for m in conv.messages] == ["user", "assistant"]
+    assert conv.messages[0].text == "fix the bug"
+    assert conv.messages[1].text == "Fixed it."  # tool_use / sidechain dropped
+    assert conv.title == "fix the bug"
+
+    proj = resolve_project(conv.paths, fallback_name=conv.title)
+    assert proj["slug"] == "proj"
+
+
+def test_claude_code_adapter_missing(tmp_path: Path):
+    adapter = ClaudeCodeAdapter(projects_dir=tmp_path / "nope")
     assert not adapter.available()
     assert list(adapter.conversations()) == []
 

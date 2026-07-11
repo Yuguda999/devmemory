@@ -20,7 +20,7 @@ export const TOOLS = [
       'Windows': '%USERPROFILE%\\.claude.json',
     },
     cli: 'claude mcp add devmemory devmemory -e DEVMEMORY_API_KEY={{API_KEY}} -e DEVMEMORY_HOST={{HOST}} -s user',
-    sync: { badge: 'HOOK', tone: 'auto', text: 'SessionStart + Stop hooks capture the transcript automatically — deterministic, no daemon. Saves only the project you attach with <code>devmemory start</code>.' },
+    sync: { badge: 'HOOK + WATCH', tone: 'auto', text: 'SessionStart + Stop hooks capture the transcript automatically. <code>devmemory start</code> also runs the watch daemon over <code>~/.claude/projects</code> as a fallback, so the attached project saves even when the hooks aren\'t wired.' },
   },
   {
     slug: 'cursor',
@@ -142,7 +142,7 @@ export const INSTALL_METHODS = [
 // ── Auto-save mechanisms ─────────────────────────────────────────────────────
 export const SYNC_MECHANISMS = [
   { badge: 'HOOK', tone: 'auto', label: 'Tool-fired hook', text: 'The tool itself fires a hook that hands us a plaintext transcript — deterministic, no daemon. <code>devmemory install</code> wires it. <strong>Claude Code</strong>, <strong>Windsurf</strong>, <strong>Augment</strong>.' },
-  { badge: 'WATCH', tone: 'auto', label: 'Watch daemon', text: 'For tools with no hook, <code>devmemory start</code> launches a background daemon that tails the tool\'s local store. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>.' },
+  { badge: 'WATCH', tone: 'auto', label: 'Watch daemon', text: 'For tools with no hook, <code>devmemory start</code> launches a background daemon that tails the tool\'s local store. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>, and <strong>Claude Code</strong> (fallback for its <code>~/.claude/projects</code> transcripts).' },
   { badge: 'MCP + RULES', tone: '', label: 'Agent-driven', text: 'Save/restore run through the MCP tools, driven by an always-on global rules file. <strong>Antigravity</strong> (<code>~/.gemini/GEMINI.md</code>).' },
   { badge: 'CLI', tone: '', label: 'Manual inject', text: '<code>devmemory inject</code> writes context to <code>CLAUDE.md</code> / rules files on demand.' },
 ];

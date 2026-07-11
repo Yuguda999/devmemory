@@ -12,7 +12,7 @@ import { clearActive, readActive, writeActive, writeConfig } from "./store.js";
 
 const DAEMON_NOTE =
   "   Auto-save for hook tools (Claude Code, Windsurf) runs via hooks from `devmemory install`.\n" +
-  "   For store tools (Cursor, Cline, Kilo, Codex), run the Python daemon:\n" +
+  "   For store tools (Claude Code, Cursor, Cline, Kilo, Codex), run the Python daemon:\n" +
   "   pipx install devmemory-ai  &&  devmemory watch";
 
 function persistConn({ host: h, apiKey }) {

@@ -133,7 +133,7 @@ def run(interval: int = DEFAULT_INTERVAL, once: bool = False) -> int:
 
     adapters = available_adapters()
     if not adapters:
-        _log("no supported tool stores found on this machine (Cursor/Cline/Kilo).")
+        _log("no supported tool stores found on this machine (Claude Code/Cursor/Cline/Kilo/Codex).")
         return 1
 
     _log(f"watching: {', '.join(a.name for a in adapters)} (interval {interval}s)")

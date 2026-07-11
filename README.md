@@ -146,11 +146,12 @@ DevMemory saves three ways:
    encrypted) conversation store. Claude Code uses `Stop`; Windsurf uses
    `post_cascade_response_with_transcript`.
 
-2. **Tools without a transcript hook (Cursor, Cline, Kilo, Codex) — the watch daemon.**
-   These don't expose a transcript to a hook, but they *do* persist conversations
-   locally. `devmemory watch` is a background daemon that tails those stores and
-   pushes new turns — again, zero model cooperation. `install` sets it up as a
-   systemd/launchd service automatically.
+2. **Store-tailing tools (Cursor, Cline, Kilo, Codex, Claude Code) — the watch daemon.**
+   These persist conversations locally. `devmemory watch` is a background daemon
+   that tails those stores and pushes new turns — again, zero model cooperation.
+   `install` sets it up as a systemd/launchd service automatically. Claude Code is
+   covered here too (reading `~/.claude/projects/**/*.jsonl`) so the `devmemory
+   start` attach model saves it even when the Stop hook isn't wired.
 
 3. **Tools with no verified hook (Antigravity) — MCP tools + rules.**
    The Antigravity IDE exposes no per-turn transcript hook an installer can
@@ -246,7 +247,7 @@ generate_resume_prompt(session_id="...", target_tool="claude")
 | `devmemory install --tool <name> --api-key <key>` | One-time setup for an AI tool |
 | `devmemory install --all --api-key <key>` | Setup for all detected tools |
 | `devmemory inject [--cwd PATH]` | Auto-load context into CLAUDE.md, .augment/rules/ |
-| `devmemory watch` | Background daemon: auto-save Cursor/Cline/Kilo/Codex conversations |
+| `devmemory watch` | Background daemon: auto-save Claude Code/Cursor/Cline/Kilo/Codex conversations |
 | `devmemory watch --list` | Show per-tool auto-save support + which stores are present |
 | `devmemory watch --install-service` | Install watch as a systemd/launchd background service |
 
