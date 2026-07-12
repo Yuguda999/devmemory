@@ -93,6 +93,9 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 # install.py is config data: long OS config-file paths and descriptive notes
 # that can't be meaningfully shortened.
 "src/devmemory/cli/install.py" = ["E501"]
+# Email templates are inlined HTML (email clients strip <style>); wrapping the
+# style attributes would hurt readability more than it helps.
+"src/devmemory/mailer/templates.py" = ["E501"]
 # Hook scripts are standalone (run under the tool's own python3) and carry long
 # single-line JSON log breadcrumbs that read worse when wrapped.
 "src/devmemory/hooks/*.py" = ["E501"]

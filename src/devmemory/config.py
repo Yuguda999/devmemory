@@ -94,6 +94,28 @@ class Settings(BaseSettings):
     port: int = 8765
     log_level: str = "INFO"
 
+    # Public base URL used to build links in outbound emails (verification,
+    # password reset). Must be the address a user's browser can reach — NOT
+    # ``0.0.0.0``. Override in SaaS, e.g. ``https://app.devmemory.io``.
+    app_base_url: str = "http://localhost:8765"
+
+    # ── Email / SMTP ────────────────────────────────────────────
+    # Email is OPTIONAL. If ``smtp_host`` is unset, emails are logged instead of
+    # sent, and email verification is not enforced (no way to verify) — see
+    # ``email_enabled``. Configure these to enable real delivery.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True   # STARTTLS on connect (port 587)
+    smtp_use_ssl: bool = False  # implicit TLS (port 465); mutually exclusive with STARTTLS
+    smtp_from_email: str = "no-reply@devmemory.io"
+    smtp_from_name: str = "DevMemory"
+
+    # Token lifetimes
+    email_verification_expiry_hours: int = 24
+    password_reset_expiry_minutes: int = 30
+
     # ── Stripe (SaaS only) ──────────────────────────────────────
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
@@ -147,6 +169,20 @@ class Settings(BaseSettings):
     def database_is_sqlite(self) -> bool:
         """Return True when the configured database is SQLite."""
         return self.database_url.startswith("sqlite")
+
+    @property
+    def email_enabled(self) -> bool:
+        """Return True when SMTP is configured for real delivery."""
+        return bool(self.smtp_host)
+
+    @property
+    def enforce_email_verification(self) -> bool:
+        """Block unverified logins only in SaaS mode with email actually wired.
+
+        Enforcing verification without a way to deliver the email would lock new
+        users out, so it is gated on both conditions.
+        """
+        return self.is_saas and self.email_enabled
 
 
 def get_project_root() -> Path:

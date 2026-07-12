@@ -8,10 +8,16 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from devmemory.auth.hashing import hash_api_key, hash_password
+from devmemory.auth.hashing import (
+    generate_email_token,
+    hash_api_key,
+    hash_password,
+    hash_token,
+)
 from devmemory.models import (
     ApiKey,
     ContextBlock,
+    EmailToken,
     Project,
     Session,
     Subscription,
@@ -28,6 +34,7 @@ async def create_user(
     email: str,
     password: str,
     display_name: str,
+    email_verified: bool = False,
 ) -> User:
     """Register a new user with a free-tier subscription.
 
@@ -36,6 +43,8 @@ async def create_user(
         email: The user's email address.
         password: The user's plaintext password (will be hashed).
         display_name: The user's display name.
+        email_verified: Whether to mark the email already verified (self-hosted
+            / guest accounts, or when email delivery is not configured).
 
     Returns:
         The newly created User.
@@ -44,6 +53,7 @@ async def create_user(
         email=email.lower().strip(),
         password_hash=hash_password(password),
         display_name=display_name.strip(),
+        email_verified=email_verified,
     )
     session.add(user)
     await session.flush()
@@ -80,6 +90,129 @@ async def get_user_with_subscription(session: AsyncSession, user_id: str) -> Use
         select(User).where(User.id == user_id).options(selectinload(User.subscription))
     )
     return result.scalar_one_or_none()
+
+
+async def update_user_password(
+    session: AsyncSession,
+    user_id: str,
+    new_password: str,
+) -> User | None:
+    """Set a new (hashed) password for a user. Returns the user or None."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    user.password_hash = hash_password(new_password)
+    await session.flush()
+    return user
+
+
+async def update_user_profile(
+    session: AsyncSession,
+    user_id: str,
+    display_name: str,
+) -> User | None:
+    """Update a user's editable profile fields. Returns the user or None."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    user.display_name = display_name.strip()
+    await session.flush()
+    return user
+
+
+async def mark_email_verified(session: AsyncSession, user_id: str) -> User | None:
+    """Flag a user's current email as verified. Returns the user or None."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    user.email_verified = True
+    await session.flush()
+    return user
+
+
+async def set_notification_prefs(
+    session: AsyncSession,
+    user_id: str,
+    prefs: dict[str, bool],
+) -> User | None:
+    """Merge and persist a user's notification preferences. Returns the user."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    merged = user.notification_prefs
+    merged.update(prefs)
+    user.notification_prefs = merged
+    await session.flush()
+    return user
+
+
+# ── Email Token Operations (verification + password reset) ─────
+
+
+async def create_email_token(
+    session: AsyncSession,
+    user_id: str,
+    purpose: str,
+    expires_at: datetime,
+) -> str:
+    """Create a single-use email token and return the RAW token (email it once).
+
+    Any prior unused tokens of the same purpose for this user are invalidated so
+    only the newest link works.
+    """
+    await invalidate_email_tokens(session, user_id, purpose)
+
+    raw_token = generate_email_token()
+    token = EmailToken(
+        user_id=user_id,
+        purpose=purpose,
+        token_hash=hash_token(raw_token),
+        expires_at=expires_at,
+    )
+    session.add(token)
+    await session.flush()
+    return raw_token
+
+
+async def get_valid_email_token(
+    session: AsyncSession,
+    raw_token: str,
+    purpose: str,
+) -> EmailToken | None:
+    """Look up an unused, unexpired token by its raw value and purpose."""
+    result = await session.execute(
+        select(EmailToken).where(
+            EmailToken.token_hash == hash_token(raw_token),
+            EmailToken.purpose == purpose,
+        )
+    )
+    token = result.scalar_one_or_none()
+    if token is None or not token.is_valid:
+        return None
+    return token
+
+
+async def consume_email_token(session: AsyncSession, token: EmailToken) -> None:
+    """Mark a token used so it cannot be replayed."""
+    token.used_at = datetime.now(timezone.utc)
+    await session.flush()
+
+
+async def invalidate_email_tokens(
+    session: AsyncSession,
+    user_id: str,
+    purpose: str,
+) -> None:
+    """Mark all of a user's still-unused tokens of a purpose as used."""
+    await session.execute(
+        update(EmailToken)
+        .where(
+            EmailToken.user_id == user_id,
+            EmailToken.purpose == purpose,
+            EmailToken.used_at.is_(None),
+        )
+        .values(used_at=datetime.now(timezone.utc))
+    )
 
 
 # ── API Key Operations ─────────────────────────────────────────

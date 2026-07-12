@@ -20,9 +20,21 @@ os.environ["DEVMEMORY_DEPLOYMENT_MODE"] = "saas"
 
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_and_init_db():
-    """Reset the global DB engine and create tables for each test."""
+    """Reset the global DB engine and create tables for each test.
+
+    The module-level ``os.environ`` override above only takes effect if this
+    module is imported before ``devmemory.config`` builds its ``settings``
+    singleton — which is not guaranteed under full-suite collection order. So we
+    also pin ``settings.database_url`` to the in-memory URL here (and restore it
+    afterwards), otherwise these tests would write to the real ``~/.devmemory``
+    database and pollute it across runs.
+    """
+    from devmemory.config import settings
     from devmemory.db import engine as engine_mod
     from devmemory.db.engine import close_db, init_db
+
+    saved_url = settings.database_url
+    settings.database_url = "sqlite+aiosqlite://"
 
     # Reset engine globals so each test gets a fresh in-memory DB
     if engine_mod._engine is not None:
@@ -35,8 +47,9 @@ async def _reset_and_init_db():
 
     yield
 
-    # Cleanup after test
+    # Cleanup after test and restore the real settings/engine for other modules
     await close_db()
+    settings.database_url = saved_url
 
 
 @pytest.fixture

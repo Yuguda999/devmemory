@@ -90,6 +90,25 @@ export function setAuth(token, user) {
   localStorage.setItem('dm_user', JSON.stringify(user));
 }
 
+/** Merge fields into the stored user (after a profile/email change). */
+export function setUser(patch) {
+  state.user = { ...(state.user || {}), ...patch };
+  localStorage.setItem('dm_user', JSON.stringify(state.user));
+}
+
+/** Fetch the authoritative account profile and cache it in state.user. */
+export async function refreshMe() {
+  const me = await api.get('/account/me');
+  setUser({
+    id: me.id,
+    email: me.email,
+    display_name: me.display_name,
+    email_verified: me.email_verified,
+    tier: me.tier,
+  });
+  return me;
+}
+
 /** Clear auth state without triggering navigation (used by detectMode) */
 function clearAuth() {
   state.token = null;

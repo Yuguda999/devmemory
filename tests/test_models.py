@@ -386,6 +386,7 @@ class TestTableRegistry:
             "sessions",
             "context_blocks",
             "tool_connections",
+            "email_tokens",
         }
         actual_tables = set(Base.metadata.tables.keys())
         assert expected_tables == actual_tables

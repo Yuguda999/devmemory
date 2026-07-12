@@ -44,6 +44,78 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user_id: str
     email: str
+    display_name: str = ""
+    email_verified: bool = True
+
+
+# ── Account: profile, password, email, notifications ───────────
+
+
+class MeResponse(BaseModel):
+    """The authenticated user's account profile."""
+
+    id: str
+    email: str
+    display_name: str
+    email_verified: bool
+    tier: str
+    notification_prefs: dict[str, bool]
+    created_at: datetime
+
+
+class UpdateProfileRequest(BaseModel):
+    """Editable profile fields."""
+
+    display_name: str = Field(min_length=1, max_length=100)
+
+
+class ChangePasswordRequest(BaseModel):
+    """Change password while logged in."""
+
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class NotificationPrefsRequest(BaseModel):
+    """Toggle optional email notification categories."""
+
+    security_alerts: bool | None = None
+    account_events: bool | None = None
+
+
+class NotificationPrefsResponse(BaseModel):
+    """Current notification preferences."""
+
+    security_alerts: bool
+    account_events: bool
+
+
+# ── Auth: password reset + verification ────────────────────────
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Start the password-reset flow for an email address."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Complete a password reset using an emailed token."""
+
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    """Confirm an email address using an emailed token."""
+
+    token: str = Field(min_length=1)
+
+
+class ResendVerificationRequest(BaseModel):
+    """Re-send a verification email to an unverified address."""
+
+    email: EmailStr
 
 
 # ── API Keys ───────────────────────────────────────────────────
