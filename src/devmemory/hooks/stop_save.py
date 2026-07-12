@@ -143,7 +143,7 @@ def main() -> int:
 
     proj = resolve_project(cwd)
     if not should_save(proj["slug"]):
-        log("stop_save", {"stage": "skip", "reason": "project not active", "slug": proj["slug"]})
+        log("stop_save", {"stage": "skip", "reason": "auto-save paused/off", "slug": proj["slug"]})
         return 0
     body = {
         "project": proj,
