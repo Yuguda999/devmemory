@@ -8,10 +8,11 @@ turn in flight (and never re-saves an old one).
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 
-from devmemory.hooks._common import read_active, should_save
+from devmemory.hooks._common import should_save
 from devmemory.watch.adapters import Adapter, available_adapters
 from devmemory.watch.client import Client, api_key
 from devmemory.watch.models import Conversation, Message
@@ -81,9 +82,9 @@ def _process(conv: Conversation, state: WatchState, client: Client) -> int:
     if project is None:
         return 0
 
-    # Strict opt-in: only the project the user attached with `devmemory start`
-    # is saved. Everything else is skipped (watermark left untouched, so it saves
-    # correctly once/if that project becomes the active one).
+    # Auto-save is ON by default for every project. A project is skipped only
+    # when explicitly paused (~/.devmemory/paused.json) or auto-save is globally
+    # off. Watermark left untouched on skip, so a later un-pause saves correctly.
     if not should_save(project["slug"]):
         return 0
 
@@ -142,18 +143,19 @@ def run(interval: int = DEFAULT_INTERVAL, once: bool = False) -> int:
     warned_idle = False
     try:
         while True:
-            active = read_active()
-            if active is None:
-                # No attached session — save nothing until `devmemory start`.
+            # Auto-save is ON by default for every project (mempalace-style).
+            # Only sit idle when globally disabled via DEVMEMORY_AUTOSAVE=off;
+            # per-project pausing is enforced in _process via should_save.
+            if os.environ.get("DEVMEMORY_AUTOSAVE", "").strip().lower() in {"off", "0", "false", "no"}:
                 if not warned_idle:
-                    _log("no active session — run `devmemory start` in a project to begin saving.")
+                    _log("auto-save disabled (DEVMEMORY_AUTOSAVE=off) — not saving.")
                     warned_idle = True
                 if once:
                     break
                 time.sleep(interval)
                 continue
             if warned_idle:
-                _log(f"active session: {active['name']} ({active['slug']}) — saving.")
+                _log("auto-save enabled — saving every project.")
                 warned_idle = False
             saved = poll_once(adapters, state, client)
             if saved:

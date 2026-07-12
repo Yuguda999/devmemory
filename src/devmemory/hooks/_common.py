@@ -128,13 +128,37 @@ def clear_active() -> None:
         ACTIVE_PATH.unlink()
 
 
-def should_save(slug: str) -> bool:
-    """Strict opt-in gate: only save when ``slug`` is the active project.
+PAUSED_PATH = Path.home() / ".devmemory" / "paused.json"
 
-    No active marker → False (nothing is saved until ``devmemory start``).
+
+def read_paused() -> set[str]:
+    """Project slugs the user has explicitly paused auto-save for."""
+    try:
+        data = json.loads(PAUSED_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {s for s in data if isinstance(s, str)} if isinstance(data, list) else set()
+
+
+def write_paused(slugs: set[str]) -> None:
+    PAUSED_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = PAUSED_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(sorted(slugs), indent=2) + "\n", encoding="utf-8")
+    tmp.replace(PAUSED_PATH)
+
+
+def should_save(slug: str) -> bool:
+    """Save every project automatically (mempalace-style), no per-project attach.
+
+    Auto-save is ON by default so a turn is persisted the moment an AI tool
+    finishes it — matching how MemPalace weaves memories on every Stop. Opt out
+    two ways:
+      • per-project — add the slug to ``~/.devmemory/paused.json`` (``devmemory stop``)
+      • globally    — set ``DEVMEMORY_AUTOSAVE=off``
     """
-    active = read_active()
-    return bool(active and active.get("slug") == slug)
+    if os.environ.get("DEVMEMORY_AUTOSAVE", "").strip().lower() in {"off", "0", "false", "no"}:
+        return False
+    return slug not in read_paused()
 
 
 # ── Project slug resolution (ported from devmemory.resolver.git_resolver) ──────

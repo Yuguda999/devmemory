@@ -7,6 +7,25 @@ DevMemory uses [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.1] — 2026-07-12
+
+### Changed
+- **Auto-save is now ON by default for every project — no per-project attach.**
+  Previously a strict opt-in gate meant a turn was persisted only for the single
+  project attached with `devmemory start` (or the `continue_here` MCP tool); every
+  other project's Stop hook logged `skip: project not active` and saved nothing.
+  DevMemory now saves the current project on every turn automatically — matching
+  how MemPalace weaves memories on each Stop — with two opt-outs:
+  - per-project: `devmemory stop` (adds the slug to `~/.devmemory/paused.json`)
+  - globally: set `DEVMEMORY_AUTOSAVE=off`
+
+  `devmemory start` now un-pauses a project and restores its context; `devmemory
+  stop` pauses only the current project (others keep saving); `devmemory status`
+  reports the auto-save state and the paused list. The watch daemon no longer
+  requires an active marker to run.
+
+---
+
 ## [0.3.0] — 2026-07-11
 
 ### Fixed

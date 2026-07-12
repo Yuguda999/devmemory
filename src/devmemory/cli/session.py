@@ -29,9 +29,11 @@ from devmemory.cli.inject import run_inject
 from devmemory.hooks._common import (
     clear_active,
     read_active,
+    read_paused,
     resolve_project,
     write_active,
     write_config,
+    write_paused,
 )
 from devmemory.hooks._common import (
     host as resolve_host,
@@ -142,13 +144,22 @@ def run_start(args) -> None:
     cwd = getattr(args, "cwd", None) or os.getcwd()
     tool = getattr(args, "tool", None) or "unknown"
     proj = resolve_project(cwd)
-    marker = write_active(proj, tool)
-    print(f"▶️  DevMemory attached to '{marker['name']}' ({marker['slug']}) via {tool}.")
+    # Auto-save is ON for every project by default now, so `start` mainly (a)
+    # un-pauses this project if it was paused, (b) restores its context into the
+    # tool, and (c) makes sure the watch daemon is up for store-based tools.
+    paused = read_paused()
+    if proj["slug"] in paused:
+        paused.discard(proj["slug"])
+        write_paused(paused)
+        print(f"▶️  Auto-save resumed for '{proj['name']}' ({proj['slug']}).")
+    else:
+        print(f"▶️  DevMemory active for '{proj['name']}' ({proj['slug']}) via {tool}.")
+    write_active(proj, tool)  # restore target + status metadata (not a save gate)
     print(f"   Backend: {resolve_host()}")
     _restore(cwd, tool)
     pid = _spawn_daemon()
     _print_save_notice(tool, pid)
-    print("   Switch tools later with: devmemory continue")
+    print("   Pause saving for this project with: devmemory stop")
 
 
 def run_continue(args) -> None:
@@ -172,27 +183,31 @@ def run_continue(args) -> None:
 
 
 def run_stop(args) -> None:
+    # Auto-save is global-on, so `stop` pauses THIS project only — other
+    # projects keep saving and the daemon keeps running for them.
+    cwd = getattr(args, "cwd", None) or os.getcwd()
+    proj = resolve_project(cwd)
+    paused = read_paused()
+    paused.add(proj["slug"])
+    write_paused(paused)
     active = read_active()
-    clear_active()
-    stopped = _stop_daemon()
-    if active:
-        print(f"⏹️  Detached from '{active['name']}' ({active['slug']}). Auto-save OFF.")
-    else:
-        print("⏹️  No active session.")
-    if stopped:
-        print("   Watch daemon stopped.")
+    if active and active.get("slug") == proj["slug"]:
+        clear_active()
+    print(f"⏹️  Auto-save paused for '{proj['name']}' ({proj['slug']}).")
+    print("   Other projects still saving. Resume with: devmemory start")
+    print("   Disable auto-save everywhere with: DEVMEMORY_AUTOSAVE=off")
 
 
 def run_status(args) -> None:
-    active = read_active()
-    if active is None:
-        print("DevMemory: no active session. Run `devmemory start` to attach.")
-        return
+    disabled = os.environ.get("DEVMEMORY_AUTOSAVE", "").strip().lower() in {"off", "0", "false", "no"}
+    paused = read_paused()
     pid = _daemon_running()
     daemon = f"running (pid {pid})" if pid else "not running"
-    print("DevMemory active session:")
-    print(f"  project : {active['name']} ({active['slug']})")
-    print(f"  tool    : {active.get('tool', 'unknown')}")
-    print(f"  backend : {resolve_host()}")
-    print(f"  since   : {active.get('started_at', '?')}")
-    print(f"  daemon  : {daemon}")
+    print("DevMemory auto-save:")
+    print(f"  auto-save : {'OFF (DEVMEMORY_AUTOSAVE)' if disabled else 'ON for every project'}")
+    print(f"  paused    : {', '.join(sorted(paused)) if paused else '(none)'}")
+    print(f"  backend   : {resolve_host()}")
+    print(f"  daemon    : {daemon}")
+    active = read_active()
+    if active:
+        print(f"  last tool : {active.get('tool', 'unknown')} — {active['name']} ({active['slug']})")
