@@ -225,18 +225,16 @@ def _git_remote(git_root: Path) -> str | None:
 
 
 def resolve_project(cwd: str) -> dict:
-    """Return {'slug','name','remote_url'} matching the server's resolution."""
+    """Return {'slug','name','remote_url'} — identity is the project folder name.
+
+    Matches git_resolver.resolve_project_slug: git root dir name (walk up from
+    cwd), else cwd basename. Folder name is stable within a machine; git-remote
+    slugging was dropped because a flaky remote lookup forked one repo into two
+    projects.
+    """
     cwd_path = Path(cwd).resolve()
     git_root = _find_git_root(cwd_path)
-    if git_root is not None:
-        remote = _git_remote(git_root)
-        if remote:
-            slug = slugify_remote_url(remote)
-            name = slug.split("-", 1)[-1] if "-" in slug else slug
-            return {"slug": slug, "name": name, "remote_url": remote}
-        dir_name = git_root.name
-        return {"slug": _slugify_name(dir_name), "name": dir_name, "remote_url": None}
-    dir_name = cwd_path.name or "unnamed"
+    dir_name = (git_root.name if git_root is not None else cwd_path.name) or "unnamed"
     return {"slug": _slugify_name(dir_name), "name": dir_name, "remote_url": None}
 
 

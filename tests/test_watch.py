@@ -128,14 +128,18 @@ def test_cursor_adapter_missing_db(tmp_path: Path):
 # ── project resolution ──────────────────────────────────────────────────────
 
 
-def test_resolve_project_prefers_explicit_remote_url():
+def test_resolve_project_ignores_remote_url(tmp_path):
+    # remote_url is accepted for compatibility but must NOT drive the slug —
+    # identity is the project folder name.
+    d = tmp_path / "acme-widget-checkout"
+    d.mkdir()
     proj = resolve_project(
-        [], fallback_name="whatever", remote_url="git@github.com:acme/widget.git"
+        [str(d)], fallback_name="whatever", remote_url="git@github.com:acme/widget.git"
     )
     assert proj == {
-        "slug": "acme-widget",
-        "name": "widget",
-        "remote_url": "git@github.com:acme/widget.git",
+        "slug": "acme-widget-checkout",
+        "name": "acme-widget-checkout",
+        "remote_url": None,
     }
 
 
@@ -173,9 +177,11 @@ def _make_codex(tmp_path: Path) -> Path:
         "CREATE TABLE threads "
         "(id TEXT, rollout_path TEXT, cwd TEXT, git_origin_url TEXT, title TEXT)"
     )
+    proj_dir = tmp_path / "proj"
+    proj_dir.mkdir()
     conn.execute(
         "INSERT INTO threads VALUES (?, ?, ?, ?, ?)",
-        ("t1", str(rollout), "/home/u/proj", "git@github.com:acme/proj.git", "Bug fix"),
+        ("t1", str(rollout), str(proj_dir), "git@github.com:acme/proj.git", "Bug fix"),
     )
     conn.commit()
     conn.close()
@@ -197,7 +203,8 @@ def test_codex_adapter_reads_rollout(tmp_path: Path):
     assert conv.messages[1].text == "Fixed it."
 
     proj = resolve_project(conv.paths, fallback_name=conv.title, remote_url=conv.remote_url)
-    assert proj["slug"] == "acme-proj"
+    # Slug is the cwd folder name, not the git remote.
+    assert proj["slug"] == "proj"
 
 
 def test_codex_adapter_missing(tmp_path: Path):

@@ -2,11 +2,10 @@
 // Python daemon's watch/project.py so blocks saved by the Node on-demand sync
 // land on the SAME project slug as the Python daemon / hooks / MCP client.
 
-import { execFileSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 
-import { slugifyName, slugifyRemoteUrl } from "../git.js";
+import { slugifyName } from "../git.js";
 import { readPaused } from "./paused.js";
 
 // Paths under these dirs are tooling noise, not the user's project.
@@ -19,19 +18,6 @@ function findGitRoot(startDir) {
     const parent = dirname(cur);
     if (parent === cur) return null;
     cur = parent;
-  }
-}
-
-function gitRemote(gitRoot) {
-  try {
-    const out = execFileSync("git", ["remote", "get-url", "origin"], {
-      cwd: gitRoot,
-      timeout: 5000,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return out.toString().trim() || null;
-  } catch {
-    return null;
   }
 }
 
@@ -86,21 +72,14 @@ function pickDir(paths) {
   return mostCommon(dirs);
 }
 
-function nameFromSlug(slug) {
-  return slug.includes("-") ? slug.slice(slug.indexOf("-") + 1) : slug;
-}
-
 /**
  * Return { slug, name, remote_url } for a conversation, or null when it can't
- * be tied to a real directory. An explicit remoteUrl (e.g. Codex git_origin_url)
- * wins — it slugs identically to how the server resolves a git remote.
+ * be tied to a real directory. Identity is the project folder name (git root
+ * dir of the touched paths, else that dir). `remoteUrl` is accepted for
+ * compatibility but no longer drives the slug — git-remote slugging forked one
+ * repo into two projects on a flaky lookup.
  */
-export function resolveConversationProject(paths, fallbackName, remoteUrl) {
-  if (remoteUrl) {
-    const slug = slugifyRemoteUrl(remoteUrl);
-    return { slug, name: nameFromSlug(slug), remote_url: remoteUrl };
-  }
-
+export function resolveConversationProject(paths, fallbackName /* , remoteUrl */) {
   const directory = pickDir(paths || []);
   if (!directory) {
     const name = (fallbackName || "").trim() || "untitled";
@@ -108,17 +87,7 @@ export function resolveConversationProject(paths, fallbackName, remoteUrl) {
   }
 
   const gitRoot = findGitRoot(directory);
-  if (gitRoot) {
-    const remote = gitRemote(gitRoot);
-    if (remote) {
-      const slug = slugifyRemoteUrl(remote);
-      return { slug, name: nameFromSlug(slug), remote_url: remote };
-    }
-    const dn = basename(gitRoot);
-    return { slug: slugifyName(dn), name: dn, remote_url: null };
-  }
-
-  const dn = basename(directory);
+  const dn = basename(gitRoot || directory);
   return { slug: slugifyName(dn), name: dn, remote_url: null };
 }
 

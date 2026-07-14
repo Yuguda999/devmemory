@@ -148,14 +148,13 @@ class TestResolveProjectSlug:
         assert info.name == "My Custom Project"
         assert info.remote_url is None
 
-    async def test_resolves_from_git_remote(self):
-        """Use the real devmemory project to test git remote resolution."""
+    async def test_resolves_from_git_root_dir_name(self):
+        """Identity is the git root folder name — not the git remote."""
         project_dir = str(Path(__file__).resolve().parent.parent)
         info = await resolve_project_slug(project_dir)
-        assert info.slug == "yuguda999-devmemory"
+        assert info.slug == "devmemory"
         assert info.name == "devmemory"
-        assert info.remote_url is not None
-        assert "devmemory" in info.remote_url
+        assert info.remote_url is None
 
     async def test_fallback_to_dir_name_no_remote(self, tmp_path):
         """Git repo without a remote should use the directory name."""

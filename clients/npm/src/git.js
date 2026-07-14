@@ -64,7 +64,12 @@ function gitRemoteUrl(gitRoot) {
 
 /**
  * Resolve a working directory to { slug, name, remote_url }.
- * Priority: explicit → git remote → git root dir name → cwd basename.
+ * Identity is the project folder name (git root dir, else cwd basename).
+ * Priority: explicit → git root dir name → cwd basename.
+ *
+ * Git-remote slugging was dropped: a flaky remote lookup (git missing/timeout,
+ * subdir cwd) forked one repo into two projects (owner-repo vs repo). Folder
+ * name is stable within a machine and has no such failure mode.
  */
 export function resolveProject(cwd, explicitProject) {
   if (explicitProject) {
@@ -73,17 +78,6 @@ export function resolveProject(cwd, explicitProject) {
 
   const cwdPath = resolve(cwd);
   const gitRoot = findGitRoot(cwdPath);
-  if (gitRoot) {
-    const remote = gitRemoteUrl(gitRoot);
-    if (remote) {
-      const slug = slugifyRemoteUrl(remote);
-      const name = slug.includes("-") ? slug.slice(slug.indexOf("-") + 1) : slug;
-      return { slug, name, remote_url: remote };
-    }
-    const dirName = basename(gitRoot);
-    return { slug: slugifyName(dirName), name: dirName, remote_url: null };
-  }
-
-  const dirName = basename(cwdPath) || "unnamed";
+  const dirName = basename(gitRoot || cwdPath) || "unnamed";
   return { slug: slugifyName(dirName), name: dirName, remote_url: null };
 }

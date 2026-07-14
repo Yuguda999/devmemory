@@ -113,18 +113,14 @@ def resolve_project(
 ) -> dict | None:
     """Return ``{'slug','name','remote_url'}`` for the conversation, or None.
 
+    Identity is the **project folder name** — the git root dir of the paths the
+    conversation touched, else that dir's name. Git-remote slugging was dropped
+    (flaky lookups forked one repo into two projects). ``remote_url`` is accepted
+    for compatibility but no longer drives the slug.
+
     None means "couldn't tie this conversation to a real directory" — the daemon
     then skips it rather than filing it under a bogus project.
-
-    An explicit ``remote_url`` (e.g. Codex's ``git_origin_url``) wins: it slugs
-    identically to how the server resolves a git remote, guaranteeing the same
-    project across tools.
     """
-    if remote_url:
-        slug = slugify_remote_url(remote_url)
-        name = slug.split("-", 1)[-1] if "-" in slug else slug
-        return {"slug": slug, "name": name, "remote_url": remote_url}
-
     directory = _pick_dir(paths)
     if directory is None:
         # Last resort: derive a project from the conversation title so the work
@@ -133,12 +129,5 @@ def resolve_project(
         return {"slug": f"cursor-{_slugify_name(name)}", "name": name, "remote_url": None}
 
     git_root = _find_git_root(directory)
-    if git_root is not None:
-        remote = _git_remote(git_root)
-        if remote:
-            slug = slugify_remote_url(remote)
-            name = slug.split("-", 1)[-1] if "-" in slug else slug
-            return {"slug": slug, "name": name, "remote_url": remote}
-        return {"slug": _slugify_name(git_root.name), "name": git_root.name, "remote_url": None}
-
-    return {"slug": _slugify_name(directory.name), "name": directory.name, "remote_url": None}
+    dir_name = git_root.name if git_root is not None else directory.name
+    return {"slug": _slugify_name(dir_name), "name": dir_name, "remote_url": None}

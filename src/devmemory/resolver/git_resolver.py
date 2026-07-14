@@ -30,19 +30,23 @@ async def resolve_project_slug(
 ) -> ProjectInfo:
     """Resolve a working directory to a project identity.
 
+    Identity is the **project folder name** — simple and stable within a machine
+    (you always open the same folder). We deliberately do NOT slug off the git
+    remote: remote lookup is flaky (git missing/timeout, subdir cwd, pre-remote
+    history), and a single flaky miss forked one repo into two projects
+    (``owner-repo`` vs ``repo``). Folder name has no such failure mode.
+
     Resolution priority:
         1. Explicit project name (if provided by the agent).
-        2. Git remote URL → slugified (e.g. ``github.com/user/repo`` → ``user-repo``).
-        3. Git repository root directory name (if no remote configured).
-        4. Working directory basename (if not inside a git repo at all).
+        2. Git repository root directory name (walks up from cwd).
+        3. Working directory basename (if not inside a git repo at all).
 
     Args:
         cwd: The working directory path passed by the AI tool.
         explicit_project: Optional explicit project name override.
 
     Returns:
-        A :class:`ProjectInfo` with the resolved slug, display name, and
-        optional remote URL.
+        A :class:`ProjectInfo` with the resolved slug and display name.
     """
     # 1. Explicit override — use it directly.
     if explicit_project:
@@ -51,24 +55,10 @@ async def resolve_project_slug(
 
     cwd_path = Path(cwd).resolve()
 
-    # 2. Try git remote URL.
+    # 2. Git root folder name (so a subdir still maps to the repo, not the subdir).
     git_root = _find_git_root(cwd_path)
-    if git_root is not None:
-        remote_url = await _get_remote_url(git_root)
-        if remote_url:
-            slug = slugify_remote_url(remote_url)
-            name = slug.split("-", 1)[-1] if "-" in slug else slug
-            return ProjectInfo(slug=slug, name=name, remote_url=remote_url)
-
-        # 3. No remote — use the git root directory name.
-        dir_name = git_root.name
-        slug = _slugify_name(dir_name)
-        return ProjectInfo(slug=slug, name=dir_name)
-
-    # 4. Not a git repo — use the cwd basename.
-    dir_name = cwd_path.name or "unnamed"
-    slug = _slugify_name(dir_name)
-    return ProjectInfo(slug=slug, name=dir_name)
+    dir_name = (git_root.name if git_root is not None else cwd_path.name) or "unnamed"
+    return ProjectInfo(slug=_slugify_name(dir_name), name=dir_name)
 
 
 # ── URL Slugification ─────────────────────────────────────────
