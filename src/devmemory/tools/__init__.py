@@ -478,6 +478,23 @@ async def continue_here(
     except Exception:  # noqa: BLE001 — marker is best-effort
         attached = False
 
+    # On-demand sync: scan local tool stores for THIS project and push any new
+    # turns to the backend — no persistent daemon required. Fire-and-forget in a
+    # background daemon thread so a large first-run backlog can't stall the
+    # restore; the watermark advances per fully-saved conversation, so a partial
+    # run resumes cleanly on the next call. This is what makes capture work
+    # without the watch daemon: every tool calls continue_here at session start.
+    try:
+        import threading
+
+        from devmemory.watch.sync import sync_now
+
+        threading.Thread(
+            target=sync_now, args=(proj.slug, _pick_key(api_key)), daemon=True
+        ).start()
+    except Exception:  # noqa: BLE001 — sync is strictly best-effort
+        pass
+
     sess = await _api(
         "GET",
         "/sessions",

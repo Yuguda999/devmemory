@@ -99,18 +99,29 @@ class Settings(BaseSettings):
     # ``0.0.0.0``. Override in SaaS, e.g. ``https://app.devmemory.io``.
     app_base_url: str = "http://localhost:8765"
 
-    # ── Email / SMTP ────────────────────────────────────────────
-    # Email is OPTIONAL. If ``smtp_host`` is unset, emails are logged instead of
-    # sent, and email verification is not enforced (no way to verify) — see
-    # ``email_enabled``. Configure these to enable real delivery.
+    # ── Email ───────────────────────────────────────────────────
+    # Email is OPTIONAL and has two backends, auto-selected in this order:
+    #   1. SendGrid HTTP API  — if ``sendgrid_api_key`` is set (works on hosts
+    #      that block outbound SMTP, e.g. Render — it uses HTTPS/443).
+    #   2. SMTP               — if ``smtp_host`` is set.
+    #   3. Neither            — emails are logged, not sent, and verification is
+    #      not enforced (see ``email_enabled`` / ``enforce_email_verification``).
+    # ``smtp_from_email`` / ``smtp_from_name`` are the From identity for BOTH
+    # backends (for SendGrid single-sender, ``smtp_from_email`` must equal the
+    # verified sender address).
+    smtp_from_email: str = "no-reply@devmemory.io"
+    smtp_from_name: str = "DevMemory"
+
+    # SendGrid HTTP API
+    sendgrid_api_key: str | None = None
+
+    # SMTP
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_user: str | None = None
     smtp_password: str | None = None
     smtp_use_tls: bool = True   # STARTTLS on connect (port 587)
     smtp_use_ssl: bool = False  # implicit TLS (port 465); mutually exclusive with STARTTLS
-    smtp_from_email: str = "no-reply@devmemory.io"
-    smtp_from_name: str = "DevMemory"
 
     # Token lifetimes
     email_verification_expiry_hours: int = 24
@@ -172,8 +183,8 @@ class Settings(BaseSettings):
 
     @property
     def email_enabled(self) -> bool:
-        """Return True when SMTP is configured for real delivery."""
-        return bool(self.smtp_host)
+        """Return True when any email backend (SendGrid or SMTP) is configured."""
+        return bool(self.sendgrid_api_key) or bool(self.smtp_host)
 
     @property
     def enforce_email_verification(self) -> bool:

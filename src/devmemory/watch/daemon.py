@@ -64,10 +64,25 @@ def _log(msg: str) -> None:
     print(f"[devmemory watch] {msg}", file=sys.stderr, flush=True)
 
 
-def _process(conv: Conversation, state: WatchState, client: Client) -> int:
-    """Save new turns of one conversation. Returns number of blocks saved."""
+def _process(
+    conv: Conversation, state: WatchState, client: Client, scope_slug: str | None = None
+) -> int:
+    """Save new turns of one conversation. Returns number of blocks saved.
+
+    ``scope_slug`` restricts work to a single project: conversations resolving to
+    a different project are skipped WITHOUT advancing their watermark, so a later
+    unscoped daemon pass (or a scoped pass for that project) still saves them.
+    Used by the on-demand ``sync_now`` path, which only cares about the project
+    the caller just attached to.
+    """
     already = state.saved_count(conv.key())
     if len(conv.messages) <= already:
+        return 0
+
+    project = resolve_project(conv.paths, fallback_name=conv.title, remote_url=conv.remote_url)
+    if project is None:
+        return 0
+    if scope_slug is not None and project["slug"] != scope_slug:
         return 0
 
     new_messages = conv.messages[already:]
@@ -76,10 +91,6 @@ def _process(conv: Conversation, state: WatchState, client: Client) -> int:
         # Consumed messages produced no saveable block (e.g. all empty) — still
         # advance the watermark so we don't re-scan them forever.
         state.record(conv.key(), len(conv.messages), state.session_id(conv.key()))
-        return 0
-
-    project = resolve_project(conv.paths, fallback_name=conv.title, remote_url=conv.remote_url)
-    if project is None:
         return 0
 
     # Auto-save is ON by default for every project. A project is skipped only
@@ -110,7 +121,9 @@ def _process(conv: Conversation, state: WatchState, client: Client) -> int:
     return saved
 
 
-def poll_once(adapters: list[Adapter], state: WatchState, client: Client) -> int:
+def poll_once(
+    adapters: list[Adapter], state: WatchState, client: Client, scope_slug: str | None = None
+) -> int:
     total = 0
     for adapter in adapters:
         try:
@@ -120,7 +133,7 @@ def poll_once(adapters: list[Adapter], state: WatchState, client: Client) -> int
             continue
         for conv in convs:
             try:
-                total += _process(conv, state, client)
+                total += _process(conv, state, client, scope_slug=scope_slug)
             except Exception as exc:
                 _log(f"error processing {conv.key()}: {exc}")
     return total
