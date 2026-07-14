@@ -31,7 +31,7 @@ const result = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj) }
 
 export function buildServer() {
   const server = new McpServer(
-    { name: "devmemory", version: "0.3.1" },
+    { name: "devmemory", version: "0.3.2" },
     { instructions: INSTRUCTIONS },
   );
 

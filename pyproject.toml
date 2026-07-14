@@ -2,7 +2,7 @@
 # PyPI distribution name (`devmemory` is taken by an unrelated project). The
 # import package and the CLI command stay `devmemory` — see [tool.uv.build-backend].
 name = "devmemory-ai"
-version = "0.3.1"
+version = "0.3.2"
 description = "Universal Dev Memory — A persistent MCP server for cross-tool coding context"
 readme = "README.md"
 authors = [
