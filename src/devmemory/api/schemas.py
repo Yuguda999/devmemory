@@ -395,3 +395,26 @@ class BillingStatusResponse(BaseModel):
     tier: str
     limits: BillingLimits
     usage: BillingUsage
+
+
+# ── Cardano payments ───────────────────────────────────────────
+
+
+class UpgradeRequest(BaseModel):
+    """Request to upgrade to a paid tier via a Cardano payment."""
+
+    tier: str = Field(description="Target tier: 'pro' or 'team'")
+
+
+class InvoiceResponse(BaseModel):
+    """A Cardano payment invoice the user pays to upgrade."""
+
+    invoice_id: str
+    tier: str
+    status: str  # pending | paid | expired
+    network: str
+    pay_to_address: str
+    amount_lovelace: int
+    amount_ada: float
+    expires_at: str
+    tx_hash: str | None = None

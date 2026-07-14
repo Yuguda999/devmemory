@@ -110,7 +110,8 @@ class TestSubscriptionModel:
         assert sub.status == SubscriptionStatus.ACTIVE.value
         assert sub.is_active is True
         assert sub.tier_enum == SubscriptionTier.FREE
-        assert sub.stripe_customer_id is None
+        assert sub.last_tx_hash is None
+        assert sub.last_invoice_id is None
 
     async def test_subscription_tiers(self):
         """All expected tiers exist."""
@@ -387,6 +388,7 @@ class TestTableRegistry:
             "context_blocks",
             "tool_connections",
             "email_tokens",
+            "invoices",
         }
         actual_tables = set(Base.metadata.tables.keys())
         assert expected_tables == actual_tables

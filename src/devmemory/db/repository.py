@@ -18,6 +18,8 @@ from devmemory.models import (
     ApiKey,
     ContextBlock,
     EmailToken,
+    Invoice,
+    InvoiceStatus,
     Project,
     Session,
     Subscription,
@@ -751,3 +753,112 @@ async def list_tool_connections(
         .order_by(ToolConnection.last_seen_at.desc())
     )
     return list(result.scalars().all())
+
+
+# ── Invoice / Payment Operations ───────────────────────────────
+
+
+async def next_derivation_index(session: AsyncSession) -> int:
+    """Return the next unused HD address index (global, monotonic).
+
+    Each invoice derives a unique receiving address at this index. A unique
+    constraint on the column plus create-time retry guards against the rare race
+    where two concurrent invoices pick the same index.
+    """
+    from sqlalchemy import func
+
+    result = await session.execute(select(func.max(Invoice.derivation_index)))
+    current = result.scalar_one_or_none()
+    return 0 if current is None else current + 1
+
+
+async def create_invoice(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    tier: str,
+    amount_lovelace: int,
+    pay_to_address: str,
+    derivation_index: int,
+    network: str,
+    expires_at: datetime,
+) -> Invoice:
+    """Create a pending payment invoice."""
+    invoice = Invoice(
+        user_id=user_id,
+        tier=tier,
+        amount_lovelace=amount_lovelace,
+        pay_to_address=pay_to_address,
+        derivation_index=derivation_index,
+        network=network,
+        expires_at=expires_at,
+        status=InvoiceStatus.PENDING.value,
+    )
+    session.add(invoice)
+    await session.flush()
+    return invoice
+
+
+async def list_pending_invoices(session: AsyncSession, limit: int = 100) -> list[Invoice]:
+    """Return pending invoices, oldest first — used by the background poller."""
+    result = await session.execute(
+        select(Invoice)
+        .where(Invoice.status == InvoiceStatus.PENDING.value)
+        .order_by(Invoice.created_at.asc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def get_invoice(session: AsyncSession, invoice_id: str, user_id: str) -> Invoice | None:
+    """Return an invoice by id, scoped to its owner."""
+    result = await session.execute(
+        select(Invoice).where(Invoice.id == invoice_id, Invoice.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def mark_invoice_paid(
+    session: AsyncSession,
+    invoice: Invoice,
+    tx_hash: str,
+) -> None:
+    """Mark an invoice paid and record the settling transaction."""
+    invoice.status = InvoiceStatus.PAID.value
+    invoice.tx_hash = tx_hash
+    invoice.paid_at = datetime.now(timezone.utc)
+    await session.flush()
+
+
+async def mark_invoice_expired(session: AsyncSession, invoice: Invoice) -> None:
+    """Mark an invoice expired."""
+    invoice.status = InvoiceStatus.EXPIRED.value
+    await session.flush()
+
+
+async def apply_tier_upgrade(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    tier: str,
+    invoice_id: str,
+    tx_hash: str,
+    period_end: datetime,
+) -> Subscription | None:
+    """Upgrade a user's subscription to a paid tier after a confirmed payment."""
+    result = await session.execute(
+        select(Subscription).where(Subscription.user_id == user_id)
+    )
+    subscription = result.scalar_one_or_none()
+    if subscription is None:
+        subscription = Subscription(user_id=user_id)
+        session.add(subscription)
+
+    subscription.tier = tier
+    subscription.status = "active"
+    subscription.last_invoice_id = invoice_id
+    subscription.last_tx_hash = tx_hash
+    subscription.current_period_start = datetime.now(timezone.utc)
+    subscription.current_period_end = period_end
+    await session.flush()
+    return subscription

@@ -60,6 +60,11 @@ dev = [
 postgres = [
     "asyncpg>=0.29.0",
 ]
+# Server-side only: HD address derivation for Cardano payments. Not needed by
+# the MCP client, so kept out of the base deps.
+cardano = [
+    "bip_utils>=2.12.0",
+]
 
 [project.scripts]
 devmemory = "devmemory.server:run"

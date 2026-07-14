@@ -22,9 +22,25 @@ _DOCS_HTML = _STATIC_DIR / "docs.html"        # public docs page (served at /doc
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan: initialize DB on startup, close on shutdown."""
+    """Application lifespan: init DB + start payment poller on startup, clean up on shutdown."""
+    import asyncio
+
     await init_db()
+
+    poller_task: asyncio.Task | None = None
+    if settings.payments_enabled:
+        from devmemory.billing.poller import run_poller
+
+        poller_task = asyncio.create_task(run_poller())
+
     yield
+
+    if poller_task is not None:
+        import contextlib
+
+        poller_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await poller_task
     await close_db()
 
 

@@ -1,7 +1,8 @@
 import { api } from '../api.js';
-import { tierBadge, progressBar, spinner, emptyState, icon } from '../utils.js';
+import { tierBadge, progressBar, spinner, emptyState, icon, toast, copyText } from '../utils.js';
 
 export async function renderBilling(container) {
+  stopPolling();
   container.innerHTML = `
     <div class="page-header">
       <div>
@@ -43,8 +44,12 @@ export async function renderBilling(container) {
           </div>
           ${tier !== 'team' ? `
           <div style="background:rgba(124,110,247,0.08);border:1px solid rgba(124,110,247,0.2);border-radius:var(--radius-sm);padding:14px">
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px">${icon('sparkles', 15)} Upgrade to ${tier === 'free' ? 'Pro' : 'Team'}</div>
-            <div style="font-size:12.5px;color:var(--text-secondary)">Get more projects, sessions, and context blocks.</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:8px">${icon('sparkles', 15)} Upgrade to ${tier === 'free' ? 'Pro' : 'Team'}</div>
+            <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:12px">Pay in ADA on Cardano. More projects, sessions, and context blocks.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              ${tier === 'free' ? `<button class="btn btn-primary" data-upgrade="pro">Upgrade to Pro</button>` : ''}
+              <button class="btn btn-primary" data-upgrade="team">Upgrade to Team</button>
+            </div>
           </div>` : ''}
         </div>
 
@@ -60,6 +65,9 @@ export async function renderBilling(container) {
         </div>
       </div>
 
+      <!-- Payment panel (populated when an upgrade is started) -->
+      <div id="pay-panel"></div>
+
       <!-- Limits comparison table -->
       <div class="card" style="margin-top:16px">
         <div class="section-title" style="margin-bottom:16px">Plan Comparison</div>
@@ -73,9 +81,9 @@ export async function renderBilling(container) {
             </tr></thead>
             <tbody style="cursor:default">
               ${[
-                ['Projects',              '3',       '25',    'Unlimited'],
-                ['Sessions / project',    '10',      '100',   'Unlimited'],
-                ['Blocks / session',      '500',     '5,000', 'Unlimited'],
+                ['Projects',              '10',      '25',    'Unlimited'],
+                ['Sessions / project',    '30',      '100',   'Unlimited'],
+                ['Blocks / session',      '1,500',   '5,000', 'Unlimited'],
                 ['REST API access',       '✓',       '✓',     '✓'],
                 ['MCP tool access',       '✓',       '✓',     '✓'],
                 ['Priority support',      '✗',       '✓',     '✓'],
@@ -91,7 +99,117 @@ export async function renderBilling(container) {
         </div>
       </div>
     `;
+
+    body.querySelectorAll('[data-upgrade]').forEach(btn => {
+      btn.addEventListener('click', () => startUpgrade(btn.dataset.upgrade));
+    });
   } catch (err) {
     body.innerHTML = emptyState('alert-triangle', 'Failed to load billing status', err.message);
   }
+}
+
+async function startUpgrade(tier) {
+  const panel = document.getElementById('pay-panel');
+  if (!panel) return;
+  panel.innerHTML = `<div class="card" style="margin-top:16px">${spinner()}</div>`;
+  try {
+    const inv = await api.post('/billing/upgrade', { tier });
+    renderPayPanel(inv);
+  } catch (err) {
+    // 503 = payments not configured on this server.
+    const msg = /not configured/i.test(err.message)
+      ? 'Cardano payments are not enabled on this server yet.'
+      : err.message;
+    panel.innerHTML = `<div class="card" style="margin-top:16px">${emptyState('alert-triangle', 'Could not start upgrade', msg)}</div>`;
+  }
+}
+
+let _pollTimer = null;
+let _countdownTimer = null;
+
+function renderPayPanel(inv) {
+  const panel = document.getElementById('pay-panel');
+  const ada = (Math.round(inv.amount_ada * 1e6) / 1e6).toString();
+  const devMode = localStorage.getItem('dm_dev') === '1';
+
+  panel.innerHTML = `
+    <div class="card" style="margin-top:16px;max-width:520px">
+      <div class="card-title">Complete your upgrade to ${inv.tier.toUpperCase()}</div>
+      <div style="font-size:12.5px;color:var(--text-secondary);margin:6px 0 18px">
+        Send the exact amount to this address on <b>${inv.network}</b>. It confirms automatically.
+      </div>
+
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">AMOUNT</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+        <div style="flex:1;font-size:22px;font-weight:700">${ada} <span style="font-size:14px;color:var(--text-muted)">ADA</span></div>
+        <button class="btn btn-ghost btn-sm" data-copy="${ada}" title="Copy amount">${icon('copy',15)}</button>
+      </div>
+
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">TO ADDRESS</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:18px">
+        <code style="flex:1;background:var(--bg-elevated);padding:10px 12px;border-radius:var(--radius-sm);word-break:break-all;font-size:12px">${inv.pay_to_address}</code>
+        <button class="btn btn-ghost btn-sm" data-copy="${inv.pay_to_address}" title="Copy address">${icon('copy',15)}</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="spinner-dot" style="width:9px;height:9px;border-radius:50%;background:var(--blue);flex:none;animation:pulse 1.4s ease-in-out infinite"></div>
+        <div style="flex:1">
+          <div id="pay-status" style="font-size:13px;font-weight:500">Waiting for payment…</div>
+          <div id="pay-expiry" style="font-size:11.5px;color:var(--text-muted)"></div>
+        </div>
+        ${devMode ? `<button class="btn btn-ghost btn-sm" id="sim-pay">Simulate (dev)</button>` : ''}
+      </div>
+    </div>
+    <style>@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}</style>
+  `;
+
+  panel.querySelectorAll('[data-copy]').forEach(b =>
+    b.addEventListener('click', () => copyText(b.dataset.copy, b)));
+
+  const statusEl = document.getElementById('pay-status');
+  const expiryEl = document.getElementById('pay-expiry');
+
+  const finish = (res) => {
+    if (res.status === 'paid') {
+      stopPolling();
+      toast(`Payment confirmed — upgraded to ${res.tier.toUpperCase()}!`);
+      setTimeout(() => renderBilling(document.getElementById('main')), 800);
+      return true;
+    }
+    if (res.status === 'expired') {
+      stopPolling();
+      statusEl.textContent = 'Payment window expired — start a new upgrade.';
+      expiryEl.textContent = '';
+      return true;
+    }
+    return false;
+  };
+
+  const poll = async () => {
+    try { finish(await api.get(`/billing/invoice/${inv.invoice_id}`)); } catch { /* keep waiting */ }
+  };
+
+  const sim = document.getElementById('sim-pay');
+  if (sim) sim.addEventListener('click', async () => {
+    try { finish(await api.post(`/billing/invoice/${inv.invoice_id}/simulate-paid`, {})); }
+    catch (err) { statusEl.textContent = err.message; }
+  });
+
+  // Silent auto-detect + expiry countdown.
+  stopPolling();
+  _pollTimer = setInterval(poll, 8000);
+  const expiresAt = new Date(inv.expires_at).getTime();
+  const tick = () => {
+    const ms = expiresAt - Date.now();
+    if (ms <= 0) { expiryEl.textContent = ''; return; }
+    const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000);
+    expiryEl.textContent = `Expires in ${m}:${String(s).padStart(2, '0')}`;
+  };
+  tick();
+  _countdownTimer = setInterval(tick, 1000);
+}
+
+function stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
 }

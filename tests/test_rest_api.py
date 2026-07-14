@@ -302,6 +302,154 @@ class TestBillingRoutes:
         assert data["limits"]["max_projects"] is None
 
 
+# ── /billing/upgrade + /billing/invoice (Cardano payments) ──────────────────────
+
+
+@dataclass
+class _Invoice:
+    id: str = "inv-1"
+    user_id: str = "user-uuid"
+    tier: str = "pro"
+    amount_lovelace: int = 10_000_000
+    pay_to_address: str = "addr_test1qderived0"
+    derivation_index: int = 0
+    network: str = "preprod"
+    status: str = "pending"
+    tx_hash: str | None = None
+    expires_at: datetime = field(default_factory=lambda: datetime(2999, 1, 1, tzinfo=timezone.utc))
+
+    @property
+    def amount_ada(self) -> float:
+        return self.amount_lovelace / 1_000_000
+
+
+def _enable_payments(allow_test: bool = False):
+    """Return patchers so payments_enabled is True (unique-address flow)."""
+    from devmemory.config import settings
+
+    return (
+        patch.object(settings, "blockfrost_project_id", "preprodTEST"),
+        patch.object(settings, "cardano_account_xpub", "acct_xvk1test"),
+        patch.object(settings, "cardano_allow_test_payments", allow_test),
+    )
+
+
+class TestPaymentRoutes:
+    def test_upgrade_returns_503_when_not_configured(self, client):
+        # Default settings have no Blockfrost project id → payments disabled.
+        response = client.post("/billing/upgrade", json={"tier": "pro"})
+        assert response.status_code == 503
+
+    def test_upgrade_creates_invoice(self, client):
+        p1, p2, p3 = _enable_payments()
+        with p1, p2, p3, patch(
+            "devmemory.api.billing_routes.next_derivation_index",
+            AsyncMock(return_value=0),
+        ), patch(
+            "devmemory.api.billing_routes.derive_address",
+            return_value="addr_test1qderived0",
+        ), patch(
+            "devmemory.api.billing_routes.create_invoice",
+            AsyncMock(return_value=_Invoice()),
+        ):
+            response = client.post("/billing/upgrade", json={"tier": "pro"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["tier"] == "pro"
+        assert data["status"] == "pending"
+        assert data["pay_to_address"] == "addr_test1qderived0"
+        assert data["amount_ada"] == pytest.approx(10.0)
+
+    def test_upgrade_invalid_tier_422(self, client):
+        p1, p2, p3 = _enable_payments()
+        with p1, p2, p3:
+            response = client.post("/billing/upgrade", json={"tier": "gold"})
+        assert response.status_code == 422
+
+    def test_check_invoice_confirms_and_upgrades(self, client):
+        invoice = _Invoice(status="pending")
+
+        async def _mark_paid(db, inv, tx_hash):
+            inv.status = "paid"
+            inv.tx_hash = tx_hash
+
+        p1, p2, p3 = _enable_payments()
+        with p1, p2, p3, patch(
+            "devmemory.api.billing_routes.get_invoice",
+            AsyncMock(return_value=invoice),
+        ), patch(
+            "devmemory.billing.settlement.find_matching_payment",
+            AsyncMock(return_value="txCONFIRMED"),
+        ), patch(
+            "devmemory.billing.settlement.mark_invoice_paid",
+            AsyncMock(side_effect=_mark_paid),
+        ), patch(
+            "devmemory.billing.settlement.apply_tier_upgrade",
+            AsyncMock(return_value=None),
+        ) as mock_upgrade:
+            response = client.get("/billing/invoice/inv-1")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "paid"
+        assert data["tx_hash"] == "txCONFIRMED"
+        assert mock_upgrade.call_args.kwargs["tier"] == "pro"
+
+    def test_check_invoice_still_pending(self, client):
+        p1, p2, p3 = _enable_payments()
+        with p1, p2, p3, patch(
+            "devmemory.api.billing_routes.get_invoice",
+            AsyncMock(return_value=_Invoice(status="pending")),
+        ), patch(
+            "devmemory.billing.settlement.find_matching_payment",
+            AsyncMock(return_value=None),
+        ):
+            response = client.get("/billing/invoice/inv-1")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "pending"
+
+    def test_check_invoice_not_found_404(self, client):
+        p1, p2, p3 = _enable_payments()
+        with p1, p2, p3, patch(
+            "devmemory.api.billing_routes.get_invoice",
+            AsyncMock(return_value=None),
+        ):
+            response = client.get("/billing/invoice/ghost")
+        assert response.status_code == 404
+
+    def test_simulate_paid_disabled_by_default_404(self, client):
+        p1, p2, p3 = _enable_payments(allow_test=False)
+        with p1, p2, p3:
+            response = client.post("/billing/invoice/inv-1/simulate-paid")
+        assert response.status_code == 404
+
+    def test_simulate_paid_upgrades_when_allowed(self, client):
+        invoice = _Invoice(status="pending")
+
+        async def _mark_paid(db, inv, tx_hash):
+            inv.status = "paid"
+            inv.tx_hash = tx_hash
+
+        p1, p2, p3 = _enable_payments(allow_test=True)
+        with p1, p2, p3, patch(
+            "devmemory.api.billing_routes.get_invoice",
+            AsyncMock(return_value=invoice),
+        ), patch(
+            "devmemory.api.billing_routes.mark_invoice_paid",
+            AsyncMock(side_effect=_mark_paid),
+        ), patch(
+            "devmemory.api.billing_routes.apply_tier_upgrade",
+            AsyncMock(return_value=None),
+        ) as mock_upgrade:
+            response = client.post("/billing/invoice/inv-1/simulate-paid")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "paid"
+        assert mock_upgrade.call_args.kwargs["tier"] == "pro"
+
+
 # ── /connections ─────────────────────────────────────────────────────────────────
 
 
