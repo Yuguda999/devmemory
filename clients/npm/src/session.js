@@ -9,11 +9,26 @@ import { host } from "./config.js";
 import { resolveProject } from "./git.js";
 import { runInject } from "./inject.js";
 import { clearActive, readActive, writeActive, writeConfig } from "./store.js";
+import { syncNow } from "./watch/sync.js";
+
+// Scan local tool stores for this project and push new turns to the backend.
+// Awaited (not fire-and-forget) because the CLI process exits when the command
+// returns — a detached scan would be killed. Scoped + watermarked, so after the
+// first drain it's fast. Never throws.
+async function syncProject(slug, apiKey) {
+  try {
+    const n = await syncNow(slug, apiKey);
+    if (n) console.log(`   Synced ${n} new turn(s) from local tool history.`);
+  } catch {
+    /* sync is best-effort */
+  }
+}
 
 const DAEMON_NOTE =
   "   Auto-save for hook tools (Claude Code, Windsurf) runs via hooks from `devmemory install`.\n" +
-  "   For store tools (Claude Code, Cursor, Cline, Kilo, Codex), run the Python daemon:\n" +
-  "   pipx install devmemory-ai  &&  devmemory watch";
+  "   Local tool history (Claude Code, Cursor, Cline, Kilo, Codex) is scanned + pushed\n" +
+  "   on demand each time you run `devmemory continue`. For near-real-time capture,\n" +
+  "   run the optional Python daemon: pipx install devmemory-ai  &&  devmemory watch";
 
 function persistConn({ host: h, apiKey }) {
   writeConfig({ host: h, api_key: apiKey });
@@ -35,6 +50,7 @@ export async function runStart({ cwd, tool, host: h, apiKey }) {
   const marker = writeActive(project, t);
   console.log(`▶️  DevMemory attached to '${marker.name}' (${marker.slug}) via ${t}.`);
   console.log(`   Backend: ${host()}`);
+  await syncProject(marker.slug, apiKey);
   await restore(dir, t, apiKey);
   console.log("   Switch tools later with: devmemory continue");
   console.log(DAEMON_NOTE);
@@ -54,6 +70,7 @@ export async function runContinue({ cwd, tool, host: h, apiKey }) {
     t,
   );
   console.log(`⏩ Continuing '${marker.name}' (${marker.slug}) in ${t}.`);
+  await syncProject(marker.slug, apiKey);
   await restore(dir, t, apiKey);
 }
 
