@@ -215,4 +215,17 @@ export function runInstall({ tool, apiKey, host, configDir }) {
   }
   if (host) console.log(`   Backend: ${host}`);
   console.log("\n🎉 Restart your AI tool to activate DevMemory.");
+
+  // When run via `npx`, this process is ephemeral — there is no persistent
+  // `devmemory` command afterward, so `devmemory start` would fail. Point the
+  // user at the global install (the Node parallel to pipx / uv tool) so the
+  // bare command works. Skip the hint when already running from a global install.
+  if (import.meta.url.includes("/_npx/")) {
+    console.log(
+      "\nℹ️  For a permanent `devmemory` command (so `devmemory start` works without the" +
+        "\n   `npx …` prefix), install it globally once:" +
+        "\n     npm install -g @commanderzero/devmemory" +
+        "\n   Otherwise keep prefixing: `npx -y @commanderzero/devmemory@latest start`",
+    );
+  }
 }

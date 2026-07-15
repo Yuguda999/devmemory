@@ -46,6 +46,29 @@ devmemory --rest   # starts REST API (HTTP, for dashboards)
 > install** above — they need no venv. The PyPI package is `devmemory-ai`; it
 > installs the `devmemory` command.
 
+### Ephemeral runner vs. permanent command
+
+Each ecosystem has two forms. A **runner** downloads and runs once, leaving no
+command behind. An **installer** puts a persistent `devmemory` on your PATH so
+`devmemory start`, `devmemory stop`, etc. work with no prefix.
+
+| | Node | Python |
+|---|---|---|
+| **Runner** (ephemeral, no leftover command) | `npx @commanderzero/devmemory …` | `uvx --from devmemory-ai devmemory …` |
+| **Installer** (permanent `devmemory` on PATH) | `npm install -g @commanderzero/devmemory` | `pipx install devmemory-ai` / `uv tool install devmemory-ai` |
+
+So if you set up with **`npx`** and then `devmemory start` says *command not found*
+(or `bad interpreter`), that's expected — `npx` never installed a command. Either
+keep prefixing (`npx -y @commanderzero/devmemory@latest start`) **or** install it
+once permanently:
+
+```bash
+npm install -g @commanderzero/devmemory   # Node: bare `devmemory` now works
+```
+
+Both clients share the same `~/.devmemory/config.json`, so a permanent command set
+up either way drives the same backend the `install` step configured.
+
 > **Install it for real — don't rely on `uvx` in MCP configs.** AI tools
 > launch the MCP server with their own environment, not your shell's PATH. A bare
 > `devmemory` (or `uvx`) only resolves if it happens to be on that PATH, which

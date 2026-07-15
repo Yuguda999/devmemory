@@ -63,6 +63,7 @@ export async function renderSetup(container) {
                 <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory --help">${icon('copy', 13)}</button>
               </div>
               <div class="step-alt"><strong>Node path — nothing to install.</strong> Prefer Python? <code>pipx install devmemory-ai</code> or <code>uv tool install devmemory-ai</code> (both isolate for you). Plain <code>pip install devmemory-ai</code> works too, but needs a virtual environment on PEP 668 systems (modern Debian/Ubuntu).</div>
+              <div class="step-alt"><strong>Runner vs. permanent command.</strong> <code>npx</code> and <code>uvx</code> run once and leave no command behind — great for setup, but then <code>devmemory start</code> won't exist. For a permanent <code>devmemory</code> on your PATH, install it once: <code>npm install -g @commanderzero/devmemory</code> (Node) or <code>pipx install devmemory-ai</code> (Python).</div>
             </div>
           </div>
 
@@ -112,6 +113,7 @@ export async function renderSetup(container) {
                 <code>devmemory start</code>
                 <button class="code-copy-btn" data-copy="devmemory start">${icon('copy', 13)}</button>
               </div>
+              <div class="step-alt"><strong>No <code>devmemory</code> command?</strong> If you set up with <code>npx</code>/<code>uvx</code> there's no permanent command — either prefix it (<code>npx -y @commanderzero/devmemory@latest start</code>) or install once with <code>npm install -g @commanderzero/devmemory</code> (see step 1).</div>
               <div class="step-alt">Run inside the project you're working on. DevMemory attaches to <strong>that one project</strong>, restores its saved context, and auto-saves as you work — nothing is saved until you attach. Runs as long as you're coding; idle gaps are fine.<br><strong>Or skip the terminal:</strong> in the tool itself, just say <strong>“continue”</strong> (or “start on this project”) — the agent attaches the open folder's project and restores it via <code>continue_here</code>. Works in every connected tool.</div>
             </div>
           </div>
