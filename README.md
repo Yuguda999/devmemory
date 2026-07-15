@@ -31,7 +31,7 @@ Same project, same memory, zero friction.
 
 ```bash
 # Node — nothing to install (recommended, no Python needed):
-npx -y @commanderzero/devmemory install --tool cursor --api-key dm_key_YOUR_KEY --host https://your-backend
+npx -y @commanderzero/devmemory@latest install --tool cursor --api-key dm_key_YOUR_KEY --host https://your-backend
 
 # Python — pipx (or uv) manages an isolated environment for you:
 pipx install devmemory-ai       # or: uv tool install devmemory-ai
@@ -338,7 +338,7 @@ you run several profiles (e.g. per-client or per-org configs), install DevMemory
 into each with `--config-dir`, giving a **comma-separated list** of directories:
 
 ```bash
-npx -y @commanderzero/devmemory install --tool claude-code \
+npx -y @commanderzero/devmemory@latest install --tool claude-code \
   --api-key dm_key_YOUR_KEY --host https://your-backend \
   --config-dir ~/.claudeAcme,~/.claudeBeta,~/.claude
 ```
@@ -352,8 +352,8 @@ command auto-detects `CLAUDE_CONFIG_DIR` (or falls back to `~/.claude.json`).
 > list (`--config-dir "~/a,~/b"`) if you want to be safe.
 >
 > **Pin the version to skip stale `npx` cache** — `npx @commanderzero/devmemory@latest …`
-> (or an explicit `@0.3.3`) forces a fresh fetch. A bare name can reuse an older
-> cached copy that predates a flag. `--config-dir` requires **≥ 0.3.3**.
+> forces a fresh fetch. A bare name can reuse an older cached copy that predates a
+> flag. `--config-dir` requires **≥ 0.3.3**.
 
 ---
 
@@ -458,7 +458,7 @@ picks up edits without reinstalling.
   `.venv` used for a `pip install -e .` is removed). The shim can't launch, so *any*
   `devmemory …` invocation fails before our code runs. Fixes, in order of preference:
   - **Use the Node client** — it has no Python shim and re-fetches itself, so it can't
-    dangle: `npx -y @commanderzero/devmemory install --tool <name> --api-key <key> --host <url>`.
+    dangle: `npx -y @commanderzero/devmemory@latest install --tool <name> --api-key <key> --host <url>`.
   - **Reinstall the Python tool** so the shebang is rebuilt against a live interpreter:
     `uv tool install --reinstall devmemory-ai` (or `pipx reinstall devmemory-ai`).
   - **Remove a dead dev shim** left over from an editable install: `rm ~/.local/bin/devmemory`,

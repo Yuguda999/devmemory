@@ -59,8 +59,8 @@ export async function renderSetup(container) {
             <div class="step-body">
               <div class="step-title">Install DevMemory</div>
               <div class="step-code">
-                <code>npx -y @commanderzero/devmemory --help</code>
-                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory --help">${icon('copy', 13)}</button>
+                <code>npx -y @commanderzero/devmemory@latest --help</code>
+                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory@latest --help">${icon('copy', 13)}</button>
               </div>
               <div class="step-alt"><strong>Node path — nothing to install.</strong> Prefer Python? <code>pipx install devmemory-ai</code> or <code>uv tool install devmemory-ai</code> (both isolate for you). Plain <code>pip install devmemory-ai</code> works too, but needs a virtual environment on PEP 668 systems (modern Debian/Ubuntu).</div>
               <div class="step-alt"><strong>Runner vs. permanent command.</strong> <code>npx</code> and <code>uvx</code> run once and leave no command behind — great for setup, but then <code>devmemory start</code> won't exist. For a permanent <code>devmemory</code> on your PATH, install it once: <code>npm install -g @commanderzero/devmemory</code> (Node) or <code>pipx install devmemory-ai</code> (Python).</div>
@@ -90,8 +90,8 @@ export async function renderSetup(container) {
             <div class="step-body">
               <div class="step-title">Install for your AI tool</div>
               <div class="step-code">
-                <code>npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
-                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
+                <code>npx -y @commanderzero/devmemory@latest install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
+                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory@latest install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
               </div>
               <div class="step-alt">…or with Python, if you installed via pipx / uv tool:</div>
               <div class="step-code">
@@ -319,7 +319,7 @@ function showToolDetail(slug, apiKey) {
   const snippet = isToml ? tomlSnippet(apiKey) : mcpJsonSnippet(apiKey);
   const configLabel = isToml ? 'TOML Configuration (~/.codex/config.toml)' : 'JSON Configuration';
   const cliInstall = `devmemory install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
-  const npxInstall = `npx -y @commanderzero/devmemory install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
+  const npxInstall = `npx -y @commanderzero/devmemory@latest install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
 
   const configRows = Object.entries(t.configs).map(([os, path]) => `
     <div class="config-path-row">
@@ -363,7 +363,7 @@ function showToolDetail(slug, apiKey) {
           <code>npx -y @commanderzero/devmemory@latest install --tool claude-code --api-key YOUR_KEY --host ${window.location.origin} --config-dir ~/.claudeA,~/.claudeB,~/.claude</code>
           <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory@latest install --tool claude-code --api-key YOUR_KEY --host ${window.location.origin} --config-dir ~/.claudeA,~/.claudeB,~/.claude">${icon('copy', 13)}</button>
         </div>
-        <div class="step-alt"><strong>Commas only — no spaces</strong> (a space splits the list in your shell → <code>Unknown option '--config-dir'</code>). Pin <code>@latest</code> (or <code>@0.3.3</code>) so <code>npx</code> can't serve a stale cached build; <code>--config-dir</code> needs <strong>≥ 0.3.3</strong>.</div>
+        <div class="step-alt"><strong>Commas only — no spaces</strong> (a space splits the list in your shell → <code>Unknown option '--config-dir'</code>). Pin <code>@latest</code> so <code>npx</code> can't serve a stale cached build; <code>--config-dir</code> needs <strong>≥ 0.3.3</strong>.</div>
         ` : ''}
       </div>
 
