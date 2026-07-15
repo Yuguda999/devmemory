@@ -58,10 +58,20 @@ async def run_async_migrations() -> None:
     # Override the URL from our settings
     configuration["sqlalchemy.url"] = settings.database_url
 
+    # asyncpg caches prepared statements by default, which breaks under a
+    # pgbouncer/Supavisor transaction pooler (Supabase :6543) with
+    # "prepared statement already exists". Disable the cache there.
+    connect_args = (
+        {"statement_cache_size": 0}
+        if settings.database_url.startswith("postgresql+asyncpg://")
+        else {}
+    )
+
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:
