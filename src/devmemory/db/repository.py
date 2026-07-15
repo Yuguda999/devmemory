@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -808,6 +808,129 @@ async def list_pending_invoices(session: AsyncSession, limit: int = 100) -> list
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+# ── Admin Operations (superadmin panel) ────────────────────────
+
+
+async def platform_stats(session: AsyncSession) -> dict:
+    """Return platform-wide counts for the admin overview."""
+
+    async def _count(model, *where) -> int:
+        stmt = select(func.count()).select_from(model)
+        for w in where:
+            stmt = stmt.where(w)
+        return int(await session.scalar(stmt) or 0)
+
+    tier_rows = await session.execute(
+        select(Subscription.tier, func.count()).group_by(Subscription.tier)
+    )
+    revenue_lovelace = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(Invoice.amount_lovelace), 0)).where(
+                Invoice.status == InvoiceStatus.PAID.value
+            )
+        )
+        or 0
+    )
+    return {
+        "users_total": await _count(User),
+        "users_active": await _count(User, User.is_active.is_(True)),
+        "users_verified": await _count(User, User.email_verified.is_(True)),
+        "tiers": dict(tier_rows.all()),
+        "projects": await _count(Project),
+        "sessions": await _count(Session),
+        "context_blocks": await _count(ContextBlock),
+        "invoices_paid": await _count(Invoice, Invoice.status == InvoiceStatus.PAID.value),
+        "invoices_pending": await _count(Invoice, Invoice.status == InvoiceStatus.PENDING.value),
+        "revenue_ada": revenue_lovelace / 1_000_000,
+    }
+
+
+async def list_users_admin(
+    session: AsyncSession,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[User], dict[str, int], dict[str, int], int]:
+    """Return (users, project_counts, session_counts, total) for the admin table."""
+    q = select(User).options(selectinload(User.subscription))
+    if search:
+        q = q.where(User.email.ilike(f"%{search.strip()}%"))
+    total = int(await session.scalar(select(func.count()).select_from(q.subquery())) or 0)
+
+    users = list(
+        (
+            await session.execute(q.order_by(User.created_at.desc()).limit(limit).offset(offset))
+        )
+        .scalars()
+        .all()
+    )
+    ids = [u.id for u in users]
+    proj_counts: dict[str, int] = {}
+    sess_counts: dict[str, int] = {}
+    if ids:
+        pr = await session.execute(
+            select(Project.user_id, func.count())
+            .where(Project.user_id.in_(ids))
+            .group_by(Project.user_id)
+        )
+        proj_counts = {uid: int(c) for uid, c in pr.all()}
+        sr = await session.execute(
+            select(Project.user_id, func.count(Session.id))
+            .join(Session, Session.project_id == Project.id)
+            .where(Project.user_id.in_(ids))
+            .group_by(Project.user_id)
+        )
+        sess_counts = {uid: int(c) for uid, c in sr.all()}
+    return users, proj_counts, sess_counts, total
+
+
+async def admin_update_user(
+    session: AsyncSession,
+    user_id: str,
+    *,
+    tier: str | None = None,
+    is_active: bool | None = None,
+    is_admin: bool | None = None,
+) -> User | None:
+    """Update admin-controllable fields on a user. Returns the updated user."""
+    result = await session.execute(
+        select(User).where(User.id == user_id).options(selectinload(User.subscription))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    if is_active is not None:
+        user.is_active = is_active
+    if is_admin is not None:
+        user.is_admin = is_admin
+    if tier is not None:
+        if user.subscription is None:
+            user.subscription = Subscription(user_id=user.id, tier=tier)
+            session.add(user.subscription)
+        else:
+            user.subscription.tier = tier
+    await session.flush()
+    return user
+
+
+async def list_invoices_admin(
+    session: AsyncSession,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[tuple[Invoice, str]], int]:
+    """Return ([(invoice, user_email)], total) for the admin payments table."""
+    q = select(Invoice, User.email).join(User, User.id == Invoice.user_id)
+    if status:
+        q = q.where(Invoice.status == status)
+    total = int(await session.scalar(select(func.count()).select_from(q.subquery())) or 0)
+    rows = (
+        await session.execute(q.order_by(Invoice.created_at.desc()).limit(limit).offset(offset))
+    ).all()
+    return [(inv, email) for inv, email in rows], total
 
 
 async def get_invoice(session: AsyncSession, invoice_id: str, user_id: str) -> Invoice | None:

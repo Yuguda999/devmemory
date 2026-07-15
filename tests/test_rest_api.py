@@ -15,7 +15,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from devmemory.api.app import create_app
-from devmemory.auth.middleware import AuthContext, require_jwt_user, require_user
+from devmemory.auth.middleware import (
+    AuthContext,
+    require_admin,
+    require_jwt_user,
+    require_user,
+)
 from devmemory.models.subscription import SubscriptionTier
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -317,6 +322,7 @@ class _Invoice:
     status: str = "pending"
     tx_hash: str | None = None
     expires_at: datetime = field(default_factory=lambda: datetime(2999, 1, 1, tzinfo=timezone.utc))
+    created_at: datetime = field(default_factory=_now)
 
     @property
     def amount_ada(self) -> float:
@@ -503,3 +509,112 @@ class TestConnectionRoutes:
 
         assert response.status_code == 200
         assert response.json() == {"connections": [], "count": 0}
+
+
+# ── /admin (superadmin) ─────────────────────────────────────────────────────────
+
+
+@dataclass
+class _Sub:
+    tier: str = "pro"
+
+
+@dataclass
+class _AdminUser:
+    id: str = "u1"
+    email: str = "user@example.com"
+    display_name: str = "User One"
+    is_active: bool = True
+    is_admin: bool = False
+    email_verified: bool = True
+    subscription: Any = field(default_factory=_Sub)
+    created_at: datetime = field(default_factory=_now)
+
+
+_ADMIN_AUTH = AuthContext(
+    user_id="admin-uuid",
+    email="admin@example.com",
+    tier=SubscriptionTier.TEAM,
+    is_admin=True,
+)
+
+_STATS = {
+    "users_total": 5,
+    "users_active": 4,
+    "users_verified": 3,
+    "tiers": {"free": 3, "pro": 2},
+    "projects": 10,
+    "sessions": 20,
+    "context_blocks": 100,
+    "invoices_paid": 2,
+    "invoices_pending": 1,
+    "revenue_ada": 20.0,
+}
+
+
+@pytest.fixture()
+def admin_client(client):
+    """Client whose require_admin resolves to an admin context."""
+    client.app.dependency_overrides[require_admin] = lambda: _ADMIN_AUTH
+    return client
+
+
+class TestAdminRoutes:
+    def test_non_admin_gets_403(self, client):
+        # client overrides require_jwt_user with a non-admin context; require_admin
+        # runs for real and must reject it.
+        assert client.get("/admin/stats").status_code == 403
+
+    def test_stats(self, admin_client):
+        with patch(
+            "devmemory.api.admin_routes.platform_stats",
+            AsyncMock(return_value=_STATS),
+        ):
+            r = admin_client.get("/admin/stats")
+        assert r.status_code == 200
+        assert r.json()["users_total"] == 5
+        assert r.json()["revenue_ada"] == 20.0
+
+    def test_list_users(self, admin_client):
+        with patch(
+            "devmemory.api.admin_routes.list_users_admin",
+            AsyncMock(return_value=([_AdminUser()], {"u1": 3}, {"u1": 7}, 1)),
+        ):
+            r = admin_client.get("/admin/users")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 1
+        assert data["users"][0]["tier"] == "pro"
+        assert data["users"][0]["projects"] == 3
+        assert data["users"][0]["sessions"] == 7
+
+    def test_patch_user_tier(self, admin_client):
+        with patch(
+            "devmemory.api.admin_routes.admin_update_user",
+            AsyncMock(return_value=_AdminUser(subscription=_Sub(tier="team"))),
+        ):
+            r = admin_client.patch("/admin/users/u1", json={"tier": "team"})
+        assert r.status_code == 200
+        assert r.json()["tier"] == "team"
+
+    def test_patch_invalid_tier_422(self, admin_client):
+        r = admin_client.patch("/admin/users/u1", json={"tier": "gold"})
+        assert r.status_code == 422
+
+    def test_cannot_self_demote(self, admin_client):
+        # admin acting on their own id, removing admin → 400
+        r = admin_client.patch("/admin/users/admin-uuid", json={"is_admin": False})
+        assert r.status_code == 400
+
+    def test_list_invoices(self, admin_client):
+        inv = _Invoice(status="paid", tx_hash="abc123def456ghi", tier="pro")
+        with patch(
+            "devmemory.api.admin_routes.list_invoices_admin",
+            AsyncMock(return_value=([(inv, "buyer@example.com")], 1)),
+        ):
+            r = admin_client.get("/admin/invoices?status=paid")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 1
+        assert data["invoices"][0]["user_email"] == "buyer@example.com"
+        assert data["invoices"][0]["amount_ada"] == 10.0

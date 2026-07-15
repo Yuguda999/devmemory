@@ -59,6 +59,7 @@ class MeResponse(BaseModel):
     display_name: str
     email_verified: bool
     tier: str
+    is_admin: bool = False
     notification_prefs: dict[str, bool]
     created_at: datetime
 
@@ -418,3 +419,65 @@ class InvoiceResponse(BaseModel):
     amount_ada: float
     expires_at: str
     tx_hash: str | None = None
+
+
+# ── Admin (superadmin panel) ───────────────────────────────────
+
+
+class AdminStatsResponse(BaseModel):
+    """Platform-wide counts for the admin overview."""
+
+    users_total: int
+    users_active: int
+    users_verified: int
+    tiers: dict[str, int]
+    projects: int
+    sessions: int
+    context_blocks: int
+    invoices_paid: int
+    invoices_pending: int
+    revenue_ada: float
+
+
+class AdminUserRow(BaseModel):
+    """One user row in the admin users table."""
+
+    id: str
+    email: str
+    display_name: str
+    tier: str
+    is_active: bool
+    is_admin: bool
+    email_verified: bool
+    projects: int
+    sessions: int
+    created_at: datetime
+
+
+class AdminUserList(BaseModel):
+    users: list[AdminUserRow]
+    total: int
+
+
+class AdminUpdateUserRequest(BaseModel):
+    """Admin-editable fields on a user (all optional)."""
+
+    tier: str | None = None  # free | pro | team
+    is_active: bool | None = None
+    is_admin: bool | None = None
+
+
+class AdminInvoiceRow(BaseModel):
+    id: str
+    user_email: str
+    tier: str
+    status: str
+    amount_ada: float
+    network: str
+    tx_hash: str | None
+    created_at: datetime
+
+
+class AdminInvoiceList(BaseModel):
+    invoices: list[AdminInvoiceRow]
+    total: int

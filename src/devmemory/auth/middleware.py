@@ -32,6 +32,7 @@ class AuthContext:
     email: str
     tier: SubscriptionTier
     api_key_id: str | None = None  # set when authenticated via API key
+    is_admin: bool = False
 
 
 # ── JWT Bearer Dependency (REST API) ──────────────────────────
@@ -80,11 +81,13 @@ async def require_jwt_user(
 
         # Resolve tier while still in session (subscription is eager-loaded)
         tier = _resolve_tier(user)
+        is_admin = _resolve_admin(user)
 
     return AuthContext(
         user_id=user_id,
         email=payload["email"],
         tier=tier,
+        is_admin=is_admin,
     )
 
 
@@ -199,6 +202,35 @@ def _extract_api_key(
             return parts[1].strip()
 
     return None
+
+
+def _resolve_admin(user: object) -> bool:
+    """Return True if the user is a superadmin (DB flag or bootstrap allowlist)."""
+    from devmemory.config import settings
+
+    if getattr(user, "is_admin", False):
+        return True
+    email = getattr(user, "email", "") or ""
+    return email.lower() in settings.admin_email_set
+
+
+async def require_admin(
+    auth: AuthContext = Depends(require_jwt_user),
+) -> AuthContext:
+    """Require the caller to be an authenticated superadmin (JWT + admin flag).
+
+    Usage::
+
+        @router.get("/admin/stats")
+        async def stats(auth: AuthContext = Depends(require_admin)):
+            ...
+    """
+    if not auth.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return auth
 
 
 def _resolve_tier(user: object) -> SubscriptionTier:

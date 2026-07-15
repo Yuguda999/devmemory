@@ -105,6 +105,7 @@ export async function refreshMe() {
     display_name: me.display_name,
     email_verified: me.email_verified,
     tier: me.tier,
+    is_admin: me.is_admin,
   });
   return me;
 }

@@ -79,6 +79,7 @@ def create_app() -> FastAPI:
 
     # ── Routes ─────────────────────────────────────────────────
     from devmemory.api.account_routes import router as account_router
+    from devmemory.api.admin_routes import router as admin_router
     from devmemory.api.auth_routes import router as auth_router
     from devmemory.api.billing_routes import router as billing_router
     from devmemory.api.connection_routes import router as connection_router
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(account_router)
+    app.include_router(admin_router)
     app.include_router(project_router)
     app.include_router(session_router)
     app.include_router(billing_router)

@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     jwt_expiry_hours: int = 24
     jwt_algorithm: str = "HS256"
 
+    # Comma-separated emails that are always treated as superadmins (bootstrap).
+    # Anyone here gets admin access even if their DB ``is_admin`` flag is false —
+    # so the first admin can be granted without touching the database.
+    admin_emails: str = ""
+
     # ── Server ──────────────────────────────────────────────────
     host: str = "0.0.0.0"
     port: int = 8765
@@ -220,6 +225,11 @@ class Settings(BaseSettings):
             "preprod": "https://cardano-preprod.blockfrost.io/api/v0",
             "preview": "https://cardano-preview.blockfrost.io/api/v0",
         }.get(net, "https://cardano-preprod.blockfrost.io/api/v0")
+
+    @property
+    def admin_email_set(self) -> set[str]:
+        """Return the bootstrap admin emails, lowercased."""
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
     @property
     def payments_enabled(self) -> bool:

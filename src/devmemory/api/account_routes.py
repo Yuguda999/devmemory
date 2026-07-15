@@ -42,6 +42,7 @@ async def get_me(auth: AuthContext = Depends(require_jwt_user)) -> MeResponse:
             display_name=user.display_name,
             email_verified=user.email_verified,
             tier=auth.tier.value,
+            is_admin=auth.is_admin,
             notification_prefs=user.notification_prefs,
             created_at=user.created_at,
         )
@@ -63,6 +64,7 @@ async def update_profile(
             display_name=user.display_name,
             email_verified=user.email_verified,
             tier=auth.tier.value,
+            is_admin=auth.is_admin,
             notification_prefs=user.notification_prefs,
             created_at=user.created_at,
         )

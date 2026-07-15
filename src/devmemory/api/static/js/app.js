@@ -1,4 +1,4 @@
-import { detectMode, isLoggedIn, logout, state } from './api.js';
+import { detectMode, isLoggedIn, logout, refreshMe, state } from './api.js';
 import { icon, confirmDialog } from './utils.js';
 import { renderLogin }     from './views/login.js';
 import { renderDashboard } from './views/dashboard.js';
@@ -8,6 +8,7 @@ import { renderKeys }      from './views/keys.js';
 import { renderBilling }   from './views/billing.js';
 import { renderSetup }     from './views/setup.js';
 import { renderSettings }  from './views/settings.js';
+import { renderAdmin }     from './views/admin.js';
 import { renderForgot }    from './views/forgot.js';
 import { renderReset }     from './views/reset.js';
 import { renderVerify }    from './views/verify.js';
@@ -24,6 +25,7 @@ const ROUTES = {
   '#setup':     { label: 'Setup',     render: renderSetup,     icon: 'rocket' },
   '#billing':   { label: 'Billing',   render: renderBilling,   icon: 'credit-card' },
   '#settings':  { label: 'Settings',  render: renderSettings,  icon: 'settings' },
+  '#admin':     { label: 'Admin',     render: renderAdmin,     icon: 'shield', admin: true },
 };
 
 // Reachable without being logged in (and rendered full-screen, no sidebar).
@@ -32,7 +34,9 @@ const PUBLIC_ROUTES = ['#login', '#forgot', '#reset', '#verify'];
 /** Build or rebuild the sidebar to reflect current auth state */
 function buildSidebar() {
   const sidebar = document.getElementById('sidebar');
-  const navItems = Object.entries(ROUTES).filter(([,r]) => r.nav !== false);
+  const navItems = Object.entries(ROUTES).filter(
+    ([, r]) => r.nav !== false && (!r.admin || state.user?.is_admin)
+  );
 
   const showSignOut = isLoggedIn() && !state.selfHosted;
 
@@ -108,6 +112,11 @@ function ensureMobileChrome() {
 
 async function init() {
   await detectMode();
+  // Refresh the authoritative profile (incl. is_admin) so the sidebar can show
+  // the Admin link for superadmins. Best-effort — falls back to cached user.
+  if (isLoggedIn() && !state.selfHosted) {
+    try { await refreshMe(); } catch { /* keep cached user */ }
+  }
   buildSidebar();
   ensureMobileChrome();
 
