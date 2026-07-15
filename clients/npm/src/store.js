@@ -39,6 +39,13 @@ export function writeConfig(kv) {
     if (v != null) cfg[k] = v;
   }
   writeJson(CONFIG_PATH(), cfg);
+  // Keep the plaintext api_key file (read by config.js pickKey AND the Python
+  // client) in sync — otherwise a stale key file shadows a fresh install's
+  // config.json key and every call 401s. `install` should overwrite it.
+  if (kv.api_key) {
+    mkdirSync(dir(), { recursive: true });
+    writeFileSync(join(dir(), "api_key"), `${String(kv.api_key).trim()}\n`, "utf8");
+  }
   return cfg;
 }
 

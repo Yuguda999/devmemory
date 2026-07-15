@@ -459,6 +459,15 @@ picks up edits without reinstalling.
     # then confirm: which devmemory
     ```
   - **(Dev only)** your venv isn't active. Run `source venv/bin/activate`, then `pip install -e .`.
+- **`Invalid or revoked API key` even though your dashboard key is valid** — a stale
+  `~/.devmemory/api_key` file is shadowing the good key. DevMemory reads the key in
+  this order: `--api-key` arg → `DEVMEMORY_API_KEY` env → `~/.devmemory/api_key` →
+  `~/.devmemory/config.json`. If an old install left a revoked key in the `api_key`
+  file, it wins over the fresh key `install` wrote to `config.json`. Fix: re-run
+  `install` (v0.3.5+ overwrites both files in sync), or just delete the stale file:
+  ```bash
+  rm ~/.devmemory/api_key      # config.json's key is then used
+  ```
 - **`No such option: --rest`** — you're running an old published build, not your
   source. Reinstall from your checkout: `pip install -e .` (or use `uv run devmemory --rest`).
   Verify with `pip show devmemory` — it should list an `Editable project location`

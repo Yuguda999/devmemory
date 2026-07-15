@@ -110,6 +110,11 @@ npx -y @commanderzero/devmemory@latest install --tool claude-code \
   delete the dead shim (`rm ~/.local/bin/devmemory`) and reinstall.
 - **`Unknown option '--config-dir'`** — either a space in the comma list (see
   above) or a stale npx cache serving a build older than 0.3.3. Pin `@latest`.
+- **`Invalid or revoked API key` (but the key works on the dashboard)** — a stale
+  `~/.devmemory/api_key` file is shadowing it. Key resolution order is
+  `--api-key` → `DEVMEMORY_API_KEY` → `~/.devmemory/api_key` → `~/.devmemory/config.json`,
+  so an old key in the file beats a fresh `install`. Re-run `install` (v0.3.5+ keeps
+  both files in sync) or delete the stale file: `rm ~/.devmemory/api_key`.
 
 ## Tools exposed to the agent
 
