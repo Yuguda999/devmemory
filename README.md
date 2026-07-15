@@ -379,6 +379,17 @@ picks up edits without reinstalling.
   source. Reinstall from your checkout: `pip install -e .` (or use `uv run devmemory --rest`).
   Verify with `pip show devmemory` — it should list an `Editable project location`
   pointing at this repo.
+- **`bad interpreter: .../python3: No such file or directory`** — the `devmemory`
+  command is a shim whose shebang points at a Python interpreter that has since been
+  deleted or moved (common after a `uv`/`pipx` Python upgrade, or when a project
+  `.venv` used for a `pip install -e .` is removed). The shim can't launch, so *any*
+  `devmemory …` invocation fails before our code runs. Fixes, in order of preference:
+  - **Use the Node client** — it has no Python shim and re-fetches itself, so it can't
+    dangle: `npx -y @commanderzero/devmemory install --tool <name> --api-key <key> --host <url>`.
+  - **Reinstall the Python tool** so the shebang is rebuilt against a live interpreter:
+    `uv tool install --reinstall devmemory-ai` (or `pipx reinstall devmemory-ai`).
+  - **Remove a dead dev shim** left over from an editable install: `rm ~/.local/bin/devmemory`,
+    then reinstall via one of the above.
 
 ### Environment variables
 

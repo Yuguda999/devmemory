@@ -88,15 +88,16 @@ export async function renderSetup(container) {
             <div class="step-body">
               <div class="step-title">Install for your AI tool</div>
               <div class="step-code">
-                <code>devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
-                <button class="code-copy-btn" data-copy="devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
-              </div>
-              <div class="step-alt">…or with Node — no Python needed:</div>
-              <div class="step-code">
                 <code>npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
                 <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
               </div>
+              <div class="step-alt">…or with Python, if you installed via pipx / uv tool:</div>
+              <div class="step-code">
+                <code>devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
+                <button class="code-copy-btn" data-copy="devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
+              </div>
               <div class="step-alt">Use <code>--tool all</code> to configure every detected tool at once. <code>--host</code> points the client at this server.</div>
+              <div class="step-alt"><strong>Hitting <code>bad interpreter: …python3: No such file or directory</code>?</strong> Your Python <code>devmemory</code> shim points at an interpreter that was deleted or moved (common after a <code>uv</code>/<code>pipx</code> Python upgrade). Use the <code>npx</code> command above (it has no shim and can't dangle), or rebuild the shim with <code>uv tool install --reinstall devmemory-ai</code>.</div>
             </div>
           </div>
 
