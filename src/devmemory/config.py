@@ -11,24 +11,37 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _normalize_asyncpg_url(url: str) -> str:
-    """Rewrite libpq query params into asyncpg-compatible ones.
+    """Rewrite libpq query params into asyncpg-compatible ones and force TLS.
 
     Managed Postgres providers (Neon, Supabase) hand out URLs ending in
-    ``?sslmode=require&channel_binding=require``. asyncpg rejects ``sslmode``
-    and ``channel_binding`` as connect params, but SQLAlchemy's asyncpg dialect
-    honours ``?ssl=require`` (verified). So translate ``sslmode`` → ``ssl`` and
-    drop ``channel_binding``. The result works uniformly for both the app engine
-    and Alembic, which each build their own engine from this URL.
+    ``?sslmode=require&channel_binding=require`` — or, in Supabase's case, often
+    with no ssl param at all. asyncpg rejects ``sslmode``/``channel_binding`` as
+    connect params, but SQLAlchemy's asyncpg dialect honours ``?ssl=require``
+    (verified). So we translate ``sslmode`` → ``ssl``, drop ``channel_binding``,
+    and — for any non-local host — ensure ``ssl=require`` is present so a pasted
+    Supabase/Neon URL just works without TLS having to be spelled out. The result
+    works uniformly for both the app engine and Alembic (separate engines).
     """
     parts = urlsplit(url)
-    if not parts.query:
-        return url
     out: list[tuple[str, str]] = []
+    has_ssl = False
     for k, v in parse_qsl(parts.query, keep_blank_values=True):
         kl = k.lower()
         if kl == "channel_binding":
             continue
-        out.append(("ssl", v) if kl == "sslmode" else (k, v))
+        if kl in ("sslmode", "ssl"):
+            has_ssl = True
+            out.append(("ssl", v))
+        else:
+            out.append((k, v))
+
+    host = (parts.hostname or "").lower()
+    is_local = host in ("localhost", "127.0.0.1", "::1", "")
+    if not has_ssl and not is_local:
+        out.append(("ssl", "require"))
+
+    if not out:
+        return url
     return urlunsplit(parts._replace(query=urlencode(out)))
 
 

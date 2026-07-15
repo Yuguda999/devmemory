@@ -336,8 +336,14 @@ def _enable_payments(allow_test: bool = False):
 
 class TestPaymentRoutes:
     def test_upgrade_returns_503_when_not_configured(self, client):
-        # Default settings have no Blockfrost project id → payments disabled.
-        response = client.post("/billing/upgrade", json={"tier": "pro"})
+        # Explicitly unconfigure payments (don't rely on env defaults, which a
+        # developer's real .env may have populated).
+        from devmemory.config import settings
+
+        with patch.object(settings, "blockfrost_project_id", None), patch.object(
+            settings, "cardano_account_xpub", None
+        ):
+            response = client.post("/billing/upgrade", json={"tier": "pro"})
         assert response.status_code == 503
 
     def test_upgrade_creates_invoice(self, client):
