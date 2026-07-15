@@ -445,9 +445,20 @@ picks up edits without reinstalling.
 
 ### Troubleshooting
 
-- **`devmemory: command not found`** — the command isn't on your PATH. Either you
-  used `uvx` (which never installs a persistent command) or your venv isn't active.
-  Run `source venv/bin/activate`, then `pip install -e .`.
+- **`devmemory: command not found`** — no permanent command is on your PATH. Common causes:
+  - **You set up with a runner** (`npx` / `uvx`). Those run once and leave no command.
+    Install it permanently — `npm install -g @commanderzero/devmemory` (Node) or
+    `pipx install devmemory-ai` (Python) — or keep prefixing (`npx -y @commanderzero/devmemory@latest start`).
+  - **A global install's bin dir isn't on PATH, or the install needed `sudo`.** On
+    many Linux setups npm's global prefix is the root-owned `/usr/local`, so a plain
+    `npm install -g …` silently needs elevated permissions. Avoid `sudo` with a
+    one-time user prefix (its bin dir is usually already on PATH):
+    ```bash
+    npm config set prefix ~/.local
+    npm install -g @commanderzero/devmemory
+    # then confirm: which devmemory
+    ```
+  - **(Dev only)** your venv isn't active. Run `source venv/bin/activate`, then `pip install -e .`.
 - **`No such option: --rest`** — you're running an old published build, not your
   source. Reinstall from your checkout: `pip install -e .` (or use `uv run devmemory --rest`).
   Verify with `pip show devmemory` — it should list an `Editable project location`

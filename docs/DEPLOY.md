@@ -94,6 +94,9 @@ npx -y @commanderzero/devmemory@latest install --all --api-key dm_key_… --host
 > `@latest` forces a fresh fetch past any stale `npx` cache. For a permanent
 > `devmemory` command (so `devmemory start`/`stop` work with no prefix), install
 > once: `npm install -g @commanderzero/devmemory` (Node) or `pipx install devmemory-ai` (Python).
+> If a global install then still gives `command not found`, npm's global bin dir
+> isn't on PATH — on Linux use a sudo-free user prefix: `npm config set prefix ~/.local`
+> and re-run (`~/.local/bin` is usually already on PATH).
 
 Restart the AI tool. The MCP client now saves/reads context through your backend.
 
