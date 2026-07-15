@@ -69,6 +69,31 @@ npm install -g @commanderzero/devmemory   # Node: bare `devmemory` now works
 Both clients share the same `~/.devmemory/config.json`, so a permanent command set
 up either way drives the same backend the `install` step configured.
 
+### Requirements & platform support
+
+The DevMemory client runs on **Linux, macOS, and Windows** — it needs only a
+runtime, no compiler or system libraries. Pick whichever runtime you already have:
+
+| To use… | You need | Notes |
+|---|---|---|
+| `npx @commanderzero/devmemory …` (Node runner) | **Node ≥ 18** | No install; runs from cache each time. |
+| `npm install -g @commanderzero/devmemory` (Node, permanent) | **Node ≥ 18** + npm | Global bin must be on PATH (usually is). Some Linux setups need `npm config set prefix ~/.local` or a PATH tweak; avoid `sudo` by using a user prefix. |
+| `uvx --from devmemory-ai devmemory …` (Python runner) | **Python 3.10+** + uv | No install; runs ephemerally. |
+| `pipx install devmemory-ai` / `uv tool install devmemory-ai` (Python, permanent) | **Python 3.10+** | Puts `devmemory` on PATH in an isolated env. |
+| MCP working inside your AI tool | Node **or** Python reachable by the tool | `devmemory install` writes an absolute/`npx` command so the tool can launch it without your shell's PATH. |
+
+**Platform notes**
+
+- **Windows:** all four install methods work. The npm global bin is `%AppData%\npm`
+  (normally on PATH); there is no `~/.local/bin`. Use PowerShell/CMD paths, not `~`.
+- **`command not found` after a global install** is a PATH issue, not a broken
+  install — ensure the runtime's global bin dir is on PATH (`npm bin -g`, or
+  `python -m site --user-base`+`/bin`).
+- **`bad interpreter`** only happens to a *Python* `devmemory` shim whose
+  interpreter was deleted/moved (see [Troubleshooting](#troubleshooting)). The
+  `npx` path has no interpreter shim and cannot hit this.
+- **Most portable one-liner for any machine:** `npx -y @commanderzero/devmemory@latest install --tool <name> --api-key <key> --host <url>`, then restart the tool. A permanent CLI (`npm i -g`) is optional convenience.
+
 > **Install it for real — don't rely on `uvx` in MCP configs.** AI tools
 > launch the MCP server with their own environment, not your shell's PATH. A bare
 > `devmemory` (or `uvx`) only resolves if it happens to be on that PATH, which

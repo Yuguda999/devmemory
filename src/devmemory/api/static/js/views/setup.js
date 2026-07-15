@@ -64,6 +64,7 @@ export async function renderSetup(container) {
               </div>
               <div class="step-alt"><strong>Node path — nothing to install.</strong> Prefer Python? <code>pipx install devmemory-ai</code> or <code>uv tool install devmemory-ai</code> (both isolate for you). Plain <code>pip install devmemory-ai</code> works too, but needs a virtual environment on PEP 668 systems (modern Debian/Ubuntu).</div>
               <div class="step-alt"><strong>Runner vs. permanent command.</strong> <code>npx</code> and <code>uvx</code> run once and leave no command behind — great for setup, but then <code>devmemory start</code> won't exist. For a permanent <code>devmemory</code> on your PATH, install it once: <code>npm install -g @commanderzero/devmemory</code> (Node) or <code>pipx install devmemory-ai</code> (Python).</div>
+              <div class="step-alt"><strong>Any OS</strong> — Linux, macOS, Windows. Needs only <strong>Node ≥ 18</strong> (for <code>npx</code>/<code>npm</code>) <strong>or</strong> <strong>Python 3.10+</strong> (for <code>uvx</code>/<code>pipx</code>). No compiler, no system libraries. Most portable path: the <code>npx</code> command below → restart your tool.</div>
             </div>
           </div>
 
