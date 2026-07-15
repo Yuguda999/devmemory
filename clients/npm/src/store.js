@@ -8,9 +8,11 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const DIR = join(homedir(), ".devmemory");
-export const CONFIG_PATH = join(DIR, "config.json");
-export const ACTIVE_PATH = join(DIR, "active.json");
+// Resolved lazily (not frozen at import) so a runtime HOME change — e.g. tests
+// isolating a fresh HOME, or a process that re-homes itself — is honored.
+const dir = () => join(homedir(), ".devmemory");
+export const CONFIG_PATH = () => join(dir(), "config.json");
+export const ACTIVE_PATH = () => join(dir(), "active.json");
 
 function readJson(path) {
   try {
@@ -21,13 +23,13 @@ function readJson(path) {
 }
 
 function writeJson(path, obj) {
-  mkdirSync(DIR, { recursive: true });
+  mkdirSync(dir(), { recursive: true });
   writeFileSync(path, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
 }
 
 // ── Global config: { host, api_key } ────────────────────────────────────────
 export function readConfig() {
-  const d = readJson(CONFIG_PATH);
+  const d = readJson(CONFIG_PATH());
   return d && typeof d === "object" ? d : {};
 }
 
@@ -36,13 +38,13 @@ export function writeConfig(kv) {
   for (const [k, v] of Object.entries(kv)) {
     if (v != null) cfg[k] = v;
   }
-  writeJson(CONFIG_PATH, cfg);
+  writeJson(CONFIG_PATH(), cfg);
   return cfg;
 }
 
 // ── Active-session marker: { slug, name, remote_url, tool, started_at } ──────
 export function readActive() {
-  const d = readJson(ACTIVE_PATH);
+  const d = readJson(ACTIVE_PATH());
   return d && typeof d === "object" && d.slug ? d : null;
 }
 
@@ -57,13 +59,13 @@ export function writeActive(project, tool) {
     tool,
     started_at: started,
   };
-  writeJson(ACTIVE_PATH, marker);
+  writeJson(ACTIVE_PATH(), marker);
   return marker;
 }
 
 export function clearActive() {
   try {
-    rmSync(ACTIVE_PATH);
+    rmSync(ACTIVE_PATH());
   } catch {
     /* already absent */
   }
