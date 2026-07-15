@@ -354,6 +354,14 @@ function showToolDetail(slug, apiKey) {
           <code>${escHtml(npxInstall)}</code>
           <button class="code-copy-btn" data-copy="${escHtml(npxInstall)}">${icon('copy', 13)}</button>
         </div>
+        ${t.slug === 'claude-code' ? `
+        <div class="step-alt" style="margin-top:12px"><strong>Multiple Claude profiles?</strong> Claude Code reads <code>$CLAUDE_CONFIG_DIR/.claude.json</code> when that env var is set. Install into several with <code>--config-dir</code> — a <strong>comma-separated list, no spaces</strong>:</div>
+        <div class="step-code lg">
+          <code>npx -y @commanderzero/devmemory@latest install --tool claude-code --api-key YOUR_KEY --host ${window.location.origin} --config-dir ~/.claudeA,~/.claudeB,~/.claude</code>
+          <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory@latest install --tool claude-code --api-key YOUR_KEY --host ${window.location.origin} --config-dir ~/.claudeA,~/.claudeB,~/.claude">${icon('copy', 13)}</button>
+        </div>
+        <div class="step-alt"><strong>Commas only — no spaces</strong> (a space splits the list in your shell → <code>Unknown option '--config-dir'</code>). Pin <code>@latest</code> (or <code>@0.3.3</code>) so <code>npx</code> can't serve a stale cached build; <code>--config-dir</code> needs <strong>≥ 0.3.3</strong>.</div>
+        ` : ''}
       </div>
 
       ${t.cli ? `

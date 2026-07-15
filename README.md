@@ -282,6 +282,31 @@ generate_resume_prompt(session_id="...", target_tool="claude")
 | `devmemory watch --list` | Show per-tool auto-save support + which stores are present |
 | `devmemory watch --install-service` | Install watch as a systemd/launchd background service |
 
+### Multiple Claude Code profiles (`--config-dir`)
+
+Claude Code honors the `CLAUDE_CONFIG_DIR` environment variable — set it and
+Claude reads `$CLAUDE_CONFIG_DIR/.claude.json` instead of `~/.claude.json`. If
+you run several profiles (e.g. per-client or per-org configs), install DevMemory
+into each with `--config-dir`, giving a **comma-separated list** of directories:
+
+```bash
+npx -y @commanderzero/devmemory install --tool claude-code \
+  --api-key dm_key_YOUR_KEY --host https://your-backend \
+  --config-dir ~/.claudeAcme,~/.claudeBeta,~/.claude
+```
+
+Each directory gets its own `.claude.json` written. With no `--config-dir`, the
+command auto-detects `CLAUDE_CONFIG_DIR` (or falls back to `~/.claude.json`).
+
+> **Commas only — no spaces.** Write `~/a,~/b,~/c`, not `~/a, ~/b, ~/c`. A space
+> makes your shell split the list into separate arguments, so the client sees a
+> stray positional and errors with `Unknown option '--config-dir'`. Quote the
+> list (`--config-dir "~/a,~/b"`) if you want to be safe.
+>
+> **Pin the version to skip stale `npx` cache** — `npx @commanderzero/devmemory@latest …`
+> (or an explicit `@0.3.3`) forces a fresh fetch. A bare name can reuse an older
+> cached copy that predates a flag. `--config-dir` requires **≥ 0.3.3**.
+
 ---
 
 ## REST API
