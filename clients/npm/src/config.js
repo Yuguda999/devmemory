@@ -1,16 +1,34 @@
 // Runtime configuration for the DevMemory MCP client.
 //
-// The client never touches a database — it only needs the backend URL and an
-// API key, both from the environment (set in each AI tool's MCP config).
+// Resolution order mirrors the Python client, so both read the same setup:
+//   host:    DEVMEMORY_HOST env → ~/.devmemory/config.json → default
+//   api key: explicit arg → DEVMEMORY_API_KEY env → ~/.devmemory/api_key → config.json
+
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+import { readConfig } from "./store.js";
 
 /** Base URL of the DevMemory REST API (default: local self-host). */
 export function host() {
-  return (process.env.DEVMEMORY_HOST || "http://localhost:8765").replace(/\/+$/, "");
+  return (process.env.DEVMEMORY_HOST || readConfig().host || "http://localhost:8765").replace(
+    /\/+$/,
+    "",
+  );
 }
 
-/** Pick the API key from the explicit arg or DEVMEMORY_API_KEY. Throws if absent. */
+/** Pick the API key from arg → env → key file → config. Throws if absent. */
 export function pickKey(argKey) {
-  const key = (argKey || process.env.DEVMEMORY_API_KEY || "").trim();
+  let key = (argKey || process.env.DEVMEMORY_API_KEY || "").trim();
+  if (!key) {
+    try {
+      key = readFileSync(join(homedir(), ".devmemory", "api_key"), "utf8").trim();
+    } catch {
+      /* no key file */
+    }
+  }
+  if (!key) key = (readConfig().api_key || "").trim();
   if (!key) {
     throw new Error("No API key provided. Pass api_key / --api-key or set DEVMEMORY_API_KEY.");
   }

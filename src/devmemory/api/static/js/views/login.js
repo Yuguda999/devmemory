@@ -1,6 +1,9 @@
 import { api, setAuth } from '../api.js';
 import { toast, icon } from '../utils.js';
 
+// Tracks the email of an unverified account so we can offer a resend action.
+let _pendingUnverifiedEmail = null;
+
 export function renderLogin(container) {
   container.innerHTML = `
     <div class="auth-screen">
@@ -28,6 +31,9 @@ export function renderLogin(container) {
           <button type="submit" class="btn btn-primary" style="width:100%;margin-top:4px" id="login-submit">
             Sign In
           </button>
+          <div style="text-align:center;margin-top:14px">
+            <a href="#forgot" class="auth-link" id="link-forgot">Forgot your password?</a>
+          </div>
         </form>
 
         <!-- Register Form (hidden) -->
@@ -62,7 +68,23 @@ export function renderLogin(container) {
     errEl.textContent = msg;
     errEl.classList.add('show');
   }
-  function clearErr() { errEl.classList.remove('show'); }
+  function clearErr() { errEl.classList.remove('show'); errEl.innerHTML = ''; }
+
+  // Render an error plus a "resend verification" action for unverified accounts.
+  function showUnverified(msg, email) {
+    _pendingUnverifiedEmail = email;
+    errEl.innerHTML = `${msg} <a href="#" id="link-resend" class="auth-link">Resend verification email</a>`;
+    errEl.classList.add('show');
+    document.getElementById('link-resend').addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      try {
+        await api.post('/auth/resend-verification', { email });
+        toast('Verification email sent — check your inbox.');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    });
+  }
 
   tabLogin.addEventListener('click', () => {
     tabLogin.classList.add('active'); tabReg.classList.remove('active');
@@ -78,17 +100,28 @@ export function renderLogin(container) {
   fLogin.addEventListener('submit', async e => {
     e.preventDefault(); clearErr();
     const btn = document.getElementById('login-submit');
+    const email = document.getElementById('login-email').value;
     btn.disabled = true; btn.textContent = 'Signing in…';
     try {
       const data = await api.post('/auth/login', {
-        email:    document.getElementById('login-email').value,
+        email,
         password: document.getElementById('login-password').value,
       });
-      setAuth(data.access_token, { id: data.user_id, email: data.email });
+      setAuth(data.access_token, {
+        id: data.user_id,
+        email: data.email,
+        display_name: data.display_name,
+        email_verified: data.email_verified,
+      });
       if (window.__buildSidebar) window.__buildSidebar();
       window.location.hash = '#dashboard';
     } catch (err) {
-      showErr(err.message);
+      // A 403 for an unverified email gets a resend affordance.
+      if (/verify your email/i.test(err.message)) {
+        showUnverified(err.message, email);
+      } else {
+        showErr(err.message);
+      }
       btn.disabled = false; btn.textContent = 'Sign In';
     }
   });
@@ -103,7 +136,7 @@ export function renderLogin(container) {
         email:        document.getElementById('reg-email').value,
         password:     document.getElementById('reg-password').value,
       });
-      toast('Account created! Please sign in.');
+      toast('Account created! Check your email to verify, then sign in.');
       tabLogin.click();
       btn.disabled = false; btn.textContent = 'Create Account';
     } catch (err) {

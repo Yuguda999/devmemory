@@ -2,7 +2,7 @@
 # PyPI distribution name (`devmemory` is taken by an unrelated project). The
 # import package and the CLI command stay `devmemory` — see [tool.uv.build-backend].
 name = "devmemory-ai"
-version = "0.1.0"
+version = "0.3.2"
 description = "Universal Dev Memory — A persistent MCP server for cross-tool coding context"
 readme = "README.md"
 authors = [
@@ -60,6 +60,11 @@ dev = [
 postgres = [
     "asyncpg>=0.29.0",
 ]
+# Server-side only: HD address derivation for Cardano payments. Not needed by
+# the MCP client, so kept out of the base deps.
+cardano = [
+    "bip_utils>=2.12.0",
+]
 
 [project.scripts]
 devmemory = "devmemory.server:run"
@@ -93,6 +98,12 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 # install.py is config data: long OS config-file paths and descriptive notes
 # that can't be meaningfully shortened.
 "src/devmemory/cli/install.py" = ["E501"]
+# Email templates are inlined HTML (email clients strip <style>); wrapping the
+# style attributes would hurt readability more than it helps.
+"src/devmemory/mailer/templates.py" = ["E501"]
+# Hook scripts are standalone (run under the tool's own python3) and carry long
+# single-line JSON log breadcrumbs that read worse when wrapped.
+"src/devmemory/hooks/*.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"

@@ -47,9 +47,22 @@ mcp = FastMCP(
         "survives across AI tool switches (e.g. Claude → Cursor → Windsurf) and credit resets. "
         "Without saved context, the user loses everything when they switch tools. "
         "\n\n"
+        "## Which project? Always pass `cwd`.\n"
+        "Every project tool takes a `cwd` argument that selects the project. ALWAYS pass the "
+        "absolute path of the project folder currently open in this tool — that folder IS the "
+        "project (DevMemory resolves it by git remote or folder name; the user never names it). "
+        "Only pass an explicit `project` if the user wants a different one than the open folder; "
+        "use `list_projects` to see what exists.\n"
+        "\n"
+        "## FIRST, attach + restore: continue_here\n"
+        "When the user says 'start', 'continue', 'resume', 'pick up where we left off', or at the "
+        "start of any session on an existing project: call `continue_here(cwd=<open folder>)`. ONE "
+        "call attaches auto-save to this project AND returns the prior context to read. Do this "
+        "before get_context/generate_resume_prompt — nothing auto-saves until a project is attached.\n"
+        "\n"
         "## CRITICAL: You MUST call save_context proactively. Do NOT wait to be asked.\n"
         "\n"
-        "### When to call save_context:\n"
+        "### When to call save_context (always with the same `cwd`):\n"
         "- SESSION START: Immediately call save_context with block_type='goal' "
         "describing what the user wants to accomplish.\n"
         "- AFTER EVERY FILE EDIT or code change: save block_type='code' with a "
@@ -68,10 +81,14 @@ mcp = FastMCP(
         '- BEFORE STARTING each task: call update_task(block_id, "in_progress").\n'
         '- AFTER COMPLETING each task: call update_task(block_id, "done").\n'
         "\n"
+        "### When to call continue_here:\n"
+        "- When the user says 'continue', 'resume', 'pick up where we left off', or switches\n"
+        "  into this tool and wants prior context. ONE call attaches auto-save to this project\n"
+        "  AND returns the resume prompt. Prefer it over get_context/generate_resume_prompt for\n"
+        "  restoring, because auto-save saves nothing until a project is attached.\n"
+        "\n"
         "### When to call get_context or generate_resume_prompt:\n"
-        "- At the start of a session to restore prior work "
-        "(check for existing context before starting).\n"
-        "- When the user says 'continue', 'resume', 'pick up where we left off', or similar.\n"
+        "- At the start of a session to inspect prior work without attaching.\n"
         "\n"
         "### Authentication:\n"
         "Use the api_key argument or the DEVMEMORY_API_KEY environment variable.\n"
@@ -417,6 +434,106 @@ async def generate_resume_prompt(
     return await _api(
         "GET", f"/sessions/{session_id}/resume", api_key, params={"target_tool": target_tool}
     )
+
+
+# ── Tool: continue_here ──────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def continue_here(
+    cwd: str,
+    tool_source: str = "unknown",
+    api_key: str | None = None,
+) -> dict:
+    """Attach DevMemory auto-save to THIS project and load its saved context.
+
+    Call this when the user switches into this tool and says "continue", "resume",
+    "pick up where we left off", or otherwise wants their prior context here.
+
+    Two things happen:
+    1. **Attach** — the current project becomes the active session, so background
+       auto-save (watch daemon + deterministic hooks) is scoped to it. Auto-save
+       is strictly opt-in: it saves nothing until a project is attached this way
+       or via ``devmemory start``.
+    2. **Restore** — the latest session's context is returned as a ``prompt`` you
+       should read to continue seamlessly.
+
+    Args:
+        cwd:         Working directory — resolved locally to a project.
+        tool_source: The AI tool being attached (e.g. "claude", "cursor").
+        api_key:     DevMemory API key. Falls back to DEVMEMORY_API_KEY env var.
+    """
+    proj = await resolve_project_slug(cwd)
+
+    # Attach: write the local marker so background auto-save scopes to this
+    # project. Best-effort — a failure here must not block the restore.
+    attached = False
+    try:
+        from devmemory.hooks._common import write_active
+
+        write_active(
+            {"slug": proj.slug, "name": proj.name, "remote_url": proj.remote_url}, tool_source
+        )
+        attached = True
+    except Exception:  # noqa: BLE001 — marker is best-effort
+        attached = False
+
+    # On-demand sync: scan local tool stores for THIS project and push any new
+    # turns to the backend — no persistent daemon required. Fire-and-forget in a
+    # background daemon thread so a large first-run backlog can't stall the
+    # restore; the watermark advances per fully-saved conversation, so a partial
+    # run resumes cleanly on the next call. This is what makes capture work
+    # without the watch daemon: every tool calls continue_here at session start.
+    try:
+        import threading
+
+        from devmemory.watch.sync import sync_now
+
+        threading.Thread(
+            target=sync_now, args=(proj.slug, _pick_key(api_key)), daemon=True
+        ).start()
+    except Exception:  # noqa: BLE001 — sync is strictly best-effort
+        pass
+
+    sess = await _api(
+        "GET",
+        "/sessions",
+        api_key,
+        params={"project_slug": proj.slug, "status": "active", "limit": 1},
+    )
+    if sess.get("ok") is False:
+        return sess
+    sessions = sess.get("sessions", [])
+    if not sessions:
+        return {
+            "ok": True,
+            "attached": attached,
+            "project": proj.name,
+            "has_context": False,
+            "message": (
+                f"Attached to '{proj.name}' — auto-save is now scoped to this project. "
+                "No prior session to restore; starting fresh."
+            ),
+        }
+
+    session_id = sessions[0].get("id")
+    resume = await _api(
+        "GET", f"/sessions/{session_id}/resume", api_key, params={"target_tool": tool_source}
+    )
+    if resume.get("ok") is False:
+        return resume
+    return {
+        "ok": True,
+        "attached": attached,
+        "project": proj.name,
+        "session_id": session_id,
+        "has_context": resume.get("has_context", True),
+        "prompt": resume.get("prompt"),
+        "message": (
+            f"Attached to '{proj.name}' and loaded prior context. "
+            "Read the prompt below to continue where you left off."
+        ),
+    }
 
 
 # ── Tool: list_projects ────────────────────────────────────────────────────────

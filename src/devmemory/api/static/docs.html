@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docs — DevMemory</title>
+  <meta name="description" content="DevMemory documentation — install, the attach model, CLI commands, MCP tools, supported tools, and self-hosting.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%236366f1'/><path d='M7 8h10M7 12h10M7 16h6' stroke='%23fff' stroke-width='2' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+  <div class="bg-field"></div>
+
+  <!-- ── Nav ─────────────────────────────────────────────────────────────── -->
+  <header class="nav scrolled">
+    <div class="wrap nav-inner">
+      <a class="brand" href="/">
+        <svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
+            <stop stop-color="#818cf8"/><stop offset=".5" stop-color="#6366f1"/><stop offset="1" stop-color="#22d3ee"/>
+          </linearGradient></defs>
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lg)"/>
+          <path d="M9 11h14M9 16h14M9 21h8" stroke="#0a0b16" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        DevMemory
+      </a>
+      <nav class="nav-links">
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/docs">Docs</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn btn-ghost" href="/app" style="height:40px;padding:0 16px;font-size:14px">Open app</a>
+        <button class="nav-toggle" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-shell">
+    <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
+    <aside class="docs-side">
+      <div class="grp">Getting started</div>
+      <a href="#overview">Overview</a>
+      <a href="#install">Installation</a>
+      <a href="#quickstart">Quick start</a>
+      <div class="grp">Core</div>
+      <a href="#attach">The attach model</a>
+      <a href="#prompts">Prompts to paste</a>
+      <a href="#cli">CLI commands</a>
+      <a href="#tools">Supported tools</a>
+      <div class="grp">Reference</div>
+      <a href="#mcp">MCP tools</a>
+      <a href="#self-hosting">Self-hosting</a>
+      <a href="#troubleshooting">Troubleshooting</a>
+    </aside>
+
+    <!-- ── Content ───────────────────────────────────────────────────────── -->
+    <main class="prose">
+      <h1>Documentation</h1>
+      <p class="lead">DevMemory is a persistent memory layer for AI coding tools. It saves your project context as you work and restores it in whatever tool you switch to next.</p>
+
+      <h2 id="overview">Overview</h2>
+      <p>When your AI credits run out mid-task, the next tool starts from zero — unless your context was saved <em>before</em> the credits died. DevMemory makes saving deterministic: it does not rely on the model remembering to call a tool.</p>
+      <p>It captures work three ways depending on the tool:</p>
+      <ul>
+        <li><strong>Transcript hooks</strong> — Claude Code and Windsurf fire an OS hook that hands over a plaintext transcript; a small script POSTs each turn.</li>
+        <li><strong>Watch daemon</strong> — Claude Code, Cursor, Cline, Kilo and Codex persist conversations locally; <code>devmemory start</code> tails those stores.</li>
+        <li><strong>MCP + rules</strong> — in any MCP tool (Antigravity, Claude Desktop, or any of the above), just say <strong>“continue”</strong> and the agent attaches the open project and restores it via <code>continue_here</code>, then saves as you work. No CLI required.</li>
+      </ul>
+
+      <h2 id="install">Installation</h2>
+      <p>Pick whichever fits your setup — none of these require you to create a virtual environment by hand.</p>
+      <div id="docs-install"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Prefer the top options: <strong>npx</strong>, <strong>pipx</strong>, or <strong>uv</strong> need no virtual environment. Plain <code>pip install</code> errors on modern Debian/Ubuntu (PEP 668) unless you're inside a venv.</p></div>
+
+      <h2 id="quickstart">Quick start</h2>
+      <p>Get running in under a minute:</p>
+      <div class="code"><button class="copy-btn" data-copy="devmemory install --tool cursor --api-key YOUR_KEY --host https://devmemory.io"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><pre><span class="tok-c"># 1 — connect DevMemory to your tool (use --tool all for every detected tool)</span>
+<span class="tok-k">devmemory install</span> --tool cursor --api-key <span class="tok-s">YOUR_KEY</span> --host <span class="tok-s">https://devmemory.io</span>
+
+<span class="tok-c"># 2 — attach the project you're working on</span>
+<span class="tok-k">devmemory start</span>
+
+<span class="tok-c"># 3 — hit a wall? open the same project in another tool and continue</span>
+<span class="tok-k">devmemory continue</span></pre></div>
+      <p>Get your API key from the <a class="link" href="/app#keys">dashboard</a>. Point clients at your server with <code>--host</code>.</p>
+
+      <h2 id="attach">The attach model</h2>
+      <p>Auto-save is <strong>opt-in and scoped to one project at a time</strong>. Nothing is saved until you attach — no background daemon quietly recording every repo you touch.</p>
+      <p><strong>Two ways to attach, same result:</strong></p>
+      <ul>
+        <li><strong>In the tool</strong> — just say <strong>“continue”</strong> (or “start on this project”). The agent calls <code>continue_here</code> for the folder you have open, attaching that project and restoring its context. Works in any MCP-connected tool; no terminal needed.</li>
+        <li><strong>From a terminal</strong> — run <code>devmemory start</code> in the project folder. Best for the store-tailing tools, since it also launches the watch daemon.</li>
+      </ul>
+      <p>The CLI commands:</p>
+      <ul>
+        <li><code>devmemory start</code> — attach the current project (resolved from its git remote), restore its saved context, and begin auto-saving. Runs until you stop; long idle gaps are fine.</li>
+        <li><code>devmemory continue</code> — re-attach the active project to a <em>new</em> tool, restore its context there, and resume saving from that tool.</li>
+        <li><code>devmemory stop</code> — detach and stop auto-saving.</li>
+        <li><code>devmemory status</code> — show the active project, the attached tool, and the daemon state.</li>
+      </ul>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Both the watch daemon and the deterministic hooks respect the active project. If nothing is attached, they save nothing and log a hint to run <code>devmemory start</code>.</p></div>
+
+      <h2 id="prompts">Prompts to paste</h2>
+      <p>No commands to memorise — say one of these to your AI tool and it drives DevMemory through the MCP tools. It uses the project folder you have open, so you never name a project (except "switch"). Click to copy:</p>
+      <div id="docs-prompts"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>For "switch to another project", replace <code>PROJECT_NAME</code> with the project's name. These work in any MCP-connected tool (Claude Code, Cursor, Windsurf, Augment, Antigravity, Claude Desktop, Cline, Kilo).</p></div>
+
+      <h2 id="cli">CLI commands</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>devmemory install</code></td><td>Wire DevMemory into a tool via MCP + hooks. <code>--tool all</code> configures every detected tool. Claude Code: <code>--config-dir &lt;dir[,dir…]&gt;</code> targets specific profile dirs (auto-detects <code>CLAUDE_CONFIG_DIR</code> otherwise).</td></tr>
+          <tr><td><code>devmemory start</code></td><td>Attach a project, restore context, begin auto-saving.</td></tr>
+          <tr><td><code>devmemory continue</code></td><td>Re-attach the active project to a new tool and resume saving.</td></tr>
+          <tr><td><code>devmemory stop</code></td><td>Detach and stop the watch daemon.</td></tr>
+          <tr><td><code>devmemory status</code></td><td>Show the active session and daemon state.</td></tr>
+          <tr><td><code>devmemory inject</code></td><td>Manually load context into <code>CLAUDE.md</code> / rules files for a project.</td></tr>
+          <tr><td><code>devmemory watch --list</code></td><td>Show the auto-save mechanism and detected stores per tool.</td></tr>
+          <tr><td><code>devmemory --rest</code></td><td>Run the REST API + dashboard locally (self-hosting).</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p><strong>Multiple Claude Code profiles?</strong> Claude Code reads its config from <code>CLAUDE_CONFIG_DIR</code> when that env var is set (else <code>~/.claude.json</code>). <code>devmemory install --tool claude-code</code> auto-detects it. To set up several profiles in one run, pass <code>--config-dir ~/.claude-a,~/.claude-b</code> (comma-separated) — one install per dir.</p></div>
+
+      <h2 id="tools">Supported tools</h2>
+      <p>DevMemory never fakes support. Each tool is captured by a real, verified mechanism. There are four ways context gets saved:</p>
+      <div id="docs-mechanisms"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <p>Per-tool summary (same data drives the in-app <a class="link" href="/app#setup">Setup guide</a>, which also shows exact config snippets):</p>
+      <div id="docs-tools"><!-- rendered from js/toolsData.js by js/docs.js --></div>
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>Windsurf and Antigravity encrypt conversations on disk. DevMemory doesn't try to crack that — Windsurf hands its hook a plaintext transcript, and Antigravity saves through the MCP tools + a rules file. Run <code>devmemory watch --list</code> to see the exact mechanism + detected stores on your machine.</p></div>
+
+      <h2 id="mcp">MCP tools</h2>
+      <p>Once connected, your AI tool can call these directly. The one you'll use most:</p>
+      <ul>
+        <li><code>continue_here</code> — attach this project <em>and</em> load its context in one call, for the folder you have open. Trigger it by saying "continue", "start on this project", or "pick up where we left off". The project is picked from the open folder automatically; to target a different one, tell the agent its name.</li>
+        <li><code>save_context</code> — save a typed block (goal, decision, code, error, next_step, note).</li>
+        <li><code>get_context</code> — retrieve saved blocks for the project or session.</li>
+        <li><code>generate_resume_prompt</code> — build a "continue here" prompt tuned for a target tool.</li>
+        <li><code>start_session</code> / <code>end_session</code> / <code>list_sessions_tool</code> — manage development sessions.</li>
+        <li><code>save_tasks</code> / <code>update_task</code> — track a task list across tools.</li>
+        <li><code>list_projects_tool</code> — list all projects on your account.</li>
+      </ul>
+
+      <h2 id="self-hosting">Self-hosting</h2>
+      <p>Run DevMemory entirely on your own infrastructure. SQLite for local use, PostgreSQL for production.</p>
+      <div class="code"><button class="copy-btn" data-copy="devmemory --rest --host 0.0.0.0 --port 8765"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><pre><span class="tok-c"># start the REST API + dashboard on http://localhost:8765</span>
+<span class="tok-k">devmemory</span> --rest --host <span class="tok-s">0.0.0.0</span> --port <span class="tok-s">8765</span></pre></div>
+      <p>Then point clients at it with <code>--host http://your-server:8765</code> during <code>devmemory install</code>. The dashboard lives at <code>/app</code>; the API reference is at <code>/api-docs</code>.</p>
+
+      <h2 id="troubleshooting">Troubleshooting</h2>
+      <h3>Nothing is being saved</h3>
+      <p>Auto-save is opt-in. Run <code>devmemory start</code> in your project first, then check <code>devmemory status</code>. If the daemon isn't running, <code>start</code> will relaunch it.</p>
+      <h3>Which tools are actually captured on this machine?</h3>
+      <p>Run <code>devmemory watch --list</code> — it reports the exact mechanism per tool and which local stores were detected.</p>
+      <h3>Context isn't loading in the new tool</h3>
+      <p>Make sure you run <code>devmemory continue</code> from the same project directory, and that the tool was connected with <code>devmemory install</code>.</p>
+
+      <hr>
+      <p style="color:var(--text-dim);font-size:14px">Need the API reference? See <a class="link" href="/api-docs">/api-docs</a>. Prefer the dashboard? Open the <a class="link" href="/app">app</a>.</p>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <a class="brand" href="/">
+        <svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lg)"/>
+          <path d="M9 11h14M9 16h14M9 21h8" stroke="#0a0b16" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        DevMemory
+      </a>
+      <div class="footer-links">
+        <a href="/#features">Features</a>
+        <a href="/docs">Docs</a>
+        <a href="/app">Dashboard</a>
+        <a href="/api-docs">API</a>
+      </div>
+      <div class="copy">© DevMemory — Universal dev memory for AI coding tools. MIT licensed.</div>
+    </div>
+  </footer>
+
+  <script type="module" src="/static/js/docs.js"></script>
+  <script src="/static/js/site.js"></script>
+</body>
+</html>

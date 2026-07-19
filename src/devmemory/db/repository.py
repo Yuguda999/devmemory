@@ -4,14 +4,22 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from devmemory.auth.hashing import hash_api_key, hash_password
+from devmemory.auth.hashing import (
+    generate_email_token,
+    hash_api_key,
+    hash_password,
+    hash_token,
+)
 from devmemory.models import (
     ApiKey,
     ContextBlock,
+    EmailToken,
+    Invoice,
+    InvoiceStatus,
     Project,
     Session,
     Subscription,
@@ -28,6 +36,7 @@ async def create_user(
     email: str,
     password: str,
     display_name: str,
+    email_verified: bool = False,
 ) -> User:
     """Register a new user with a free-tier subscription.
 
@@ -36,6 +45,8 @@ async def create_user(
         email: The user's email address.
         password: The user's plaintext password (will be hashed).
         display_name: The user's display name.
+        email_verified: Whether to mark the email already verified (self-hosted
+            / guest accounts, or when email delivery is not configured).
 
     Returns:
         The newly created User.
@@ -44,6 +55,7 @@ async def create_user(
         email=email.lower().strip(),
         password_hash=hash_password(password),
         display_name=display_name.strip(),
+        email_verified=email_verified,
     )
     session.add(user)
     await session.flush()
@@ -80,6 +92,129 @@ async def get_user_with_subscription(session: AsyncSession, user_id: str) -> Use
         select(User).where(User.id == user_id).options(selectinload(User.subscription))
     )
     return result.scalar_one_or_none()
+
+
+async def update_user_password(
+    session: AsyncSession,
+    user_id: str,
+    new_password: str,
+) -> User | None:
+    """Set a new (hashed) password for a user. Returns the user or None."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    user.password_hash = hash_password(new_password)
+    await session.flush()
+    return user
+
+
+async def update_user_profile(
+    session: AsyncSession,
+    user_id: str,
+    display_name: str,
+) -> User | None:
+    """Update a user's editable profile fields. Returns the user or None."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    user.display_name = display_name.strip()
+    await session.flush()
+    return user
+
+
+async def mark_email_verified(session: AsyncSession, user_id: str) -> User | None:
+    """Flag a user's current email as verified. Returns the user or None."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    user.email_verified = True
+    await session.flush()
+    return user
+
+
+async def set_notification_prefs(
+    session: AsyncSession,
+    user_id: str,
+    prefs: dict[str, bool],
+) -> User | None:
+    """Merge and persist a user's notification preferences. Returns the user."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    merged = user.notification_prefs
+    merged.update(prefs)
+    user.notification_prefs = merged
+    await session.flush()
+    return user
+
+
+# ── Email Token Operations (verification + password reset) ─────
+
+
+async def create_email_token(
+    session: AsyncSession,
+    user_id: str,
+    purpose: str,
+    expires_at: datetime,
+) -> str:
+    """Create a single-use email token and return the RAW token (email it once).
+
+    Any prior unused tokens of the same purpose for this user are invalidated so
+    only the newest link works.
+    """
+    await invalidate_email_tokens(session, user_id, purpose)
+
+    raw_token = generate_email_token()
+    token = EmailToken(
+        user_id=user_id,
+        purpose=purpose,
+        token_hash=hash_token(raw_token),
+        expires_at=expires_at,
+    )
+    session.add(token)
+    await session.flush()
+    return raw_token
+
+
+async def get_valid_email_token(
+    session: AsyncSession,
+    raw_token: str,
+    purpose: str,
+) -> EmailToken | None:
+    """Look up an unused, unexpired token by its raw value and purpose."""
+    result = await session.execute(
+        select(EmailToken).where(
+            EmailToken.token_hash == hash_token(raw_token),
+            EmailToken.purpose == purpose,
+        )
+    )
+    token = result.scalar_one_or_none()
+    if token is None or not token.is_valid:
+        return None
+    return token
+
+
+async def consume_email_token(session: AsyncSession, token: EmailToken) -> None:
+    """Mark a token used so it cannot be replayed."""
+    token.used_at = datetime.now(timezone.utc)
+    await session.flush()
+
+
+async def invalidate_email_tokens(
+    session: AsyncSession,
+    user_id: str,
+    purpose: str,
+) -> None:
+    """Mark all of a user's still-unused tokens of a purpose as used."""
+    await session.execute(
+        update(EmailToken)
+        .where(
+            EmailToken.user_id == user_id,
+            EmailToken.purpose == purpose,
+            EmailToken.used_at.is_(None),
+        )
+        .values(used_at=datetime.now(timezone.utc))
+    )
 
 
 # ── API Key Operations ─────────────────────────────────────────
@@ -618,3 +753,235 @@ async def list_tool_connections(
         .order_by(ToolConnection.last_seen_at.desc())
     )
     return list(result.scalars().all())
+
+
+# ── Invoice / Payment Operations ───────────────────────────────
+
+
+async def next_derivation_index(session: AsyncSession) -> int:
+    """Return the next unused HD address index (global, monotonic).
+
+    Each invoice derives a unique receiving address at this index. A unique
+    constraint on the column plus create-time retry guards against the rare race
+    where two concurrent invoices pick the same index.
+    """
+    from sqlalchemy import func
+
+    result = await session.execute(select(func.max(Invoice.derivation_index)))
+    current = result.scalar_one_or_none()
+    return 0 if current is None else current + 1
+
+
+async def create_invoice(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    tier: str,
+    amount_lovelace: int,
+    pay_to_address: str,
+    derivation_index: int,
+    network: str,
+    expires_at: datetime,
+) -> Invoice:
+    """Create a pending payment invoice."""
+    invoice = Invoice(
+        user_id=user_id,
+        tier=tier,
+        amount_lovelace=amount_lovelace,
+        pay_to_address=pay_to_address,
+        derivation_index=derivation_index,
+        network=network,
+        expires_at=expires_at,
+        status=InvoiceStatus.PENDING.value,
+    )
+    session.add(invoice)
+    await session.flush()
+    return invoice
+
+
+async def list_pending_invoices(session: AsyncSession, limit: int = 100) -> list[Invoice]:
+    """Return pending invoices, oldest first — used by the background poller."""
+    result = await session.execute(
+        select(Invoice)
+        .where(Invoice.status == InvoiceStatus.PENDING.value)
+        .order_by(Invoice.created_at.asc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+# ── Admin Operations (superadmin panel) ────────────────────────
+
+
+async def platform_stats(session: AsyncSession) -> dict:
+    """Return platform-wide counts for the admin overview."""
+
+    async def _count(model, *where) -> int:
+        stmt = select(func.count()).select_from(model)
+        for w in where:
+            stmt = stmt.where(w)
+        return int(await session.scalar(stmt) or 0)
+
+    tier_rows = await session.execute(
+        select(Subscription.tier, func.count()).group_by(Subscription.tier)
+    )
+    revenue_lovelace = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(Invoice.amount_lovelace), 0)).where(
+                Invoice.status == InvoiceStatus.PAID.value
+            )
+        )
+        or 0
+    )
+    return {
+        "users_total": await _count(User),
+        "users_active": await _count(User, User.is_active.is_(True)),
+        "users_verified": await _count(User, User.email_verified.is_(True)),
+        "tiers": dict(tier_rows.all()),
+        "projects": await _count(Project),
+        "sessions": await _count(Session),
+        "context_blocks": await _count(ContextBlock),
+        "invoices_paid": await _count(Invoice, Invoice.status == InvoiceStatus.PAID.value),
+        "invoices_pending": await _count(Invoice, Invoice.status == InvoiceStatus.PENDING.value),
+        "revenue_ada": revenue_lovelace / 1_000_000,
+    }
+
+
+async def list_users_admin(
+    session: AsyncSession,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[User], dict[str, int], dict[str, int], int]:
+    """Return (users, project_counts, session_counts, total) for the admin table."""
+    q = select(User).options(selectinload(User.subscription))
+    if search:
+        q = q.where(User.email.ilike(f"%{search.strip()}%"))
+    total = int(await session.scalar(select(func.count()).select_from(q.subquery())) or 0)
+
+    users = list(
+        (
+            await session.execute(q.order_by(User.created_at.desc()).limit(limit).offset(offset))
+        )
+        .scalars()
+        .all()
+    )
+    ids = [u.id for u in users]
+    proj_counts: dict[str, int] = {}
+    sess_counts: dict[str, int] = {}
+    if ids:
+        pr = await session.execute(
+            select(Project.user_id, func.count())
+            .where(Project.user_id.in_(ids))
+            .group_by(Project.user_id)
+        )
+        proj_counts = {uid: int(c) for uid, c in pr.all()}
+        sr = await session.execute(
+            select(Project.user_id, func.count(Session.id))
+            .join(Session, Session.project_id == Project.id)
+            .where(Project.user_id.in_(ids))
+            .group_by(Project.user_id)
+        )
+        sess_counts = {uid: int(c) for uid, c in sr.all()}
+    return users, proj_counts, sess_counts, total
+
+
+async def admin_update_user(
+    session: AsyncSession,
+    user_id: str,
+    *,
+    tier: str | None = None,
+    is_active: bool | None = None,
+    is_admin: bool | None = None,
+) -> User | None:
+    """Update admin-controllable fields on a user. Returns the updated user."""
+    result = await session.execute(
+        select(User).where(User.id == user_id).options(selectinload(User.subscription))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    if is_active is not None:
+        user.is_active = is_active
+    if is_admin is not None:
+        user.is_admin = is_admin
+    if tier is not None:
+        if user.subscription is None:
+            user.subscription = Subscription(user_id=user.id, tier=tier)
+            session.add(user.subscription)
+        else:
+            user.subscription.tier = tier
+    await session.flush()
+    return user
+
+
+async def list_invoices_admin(
+    session: AsyncSession,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[tuple[Invoice, str]], int]:
+    """Return ([(invoice, user_email)], total) for the admin payments table."""
+    q = select(Invoice, User.email).join(User, User.id == Invoice.user_id)
+    if status:
+        q = q.where(Invoice.status == status)
+    total = int(await session.scalar(select(func.count()).select_from(q.subquery())) or 0)
+    rows = (
+        await session.execute(q.order_by(Invoice.created_at.desc()).limit(limit).offset(offset))
+    ).all()
+    return [(inv, email) for inv, email in rows], total
+
+
+async def get_invoice(session: AsyncSession, invoice_id: str, user_id: str) -> Invoice | None:
+    """Return an invoice by id, scoped to its owner."""
+    result = await session.execute(
+        select(Invoice).where(Invoice.id == invoice_id, Invoice.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def mark_invoice_paid(
+    session: AsyncSession,
+    invoice: Invoice,
+    tx_hash: str,
+) -> None:
+    """Mark an invoice paid and record the settling transaction."""
+    invoice.status = InvoiceStatus.PAID.value
+    invoice.tx_hash = tx_hash
+    invoice.paid_at = datetime.now(timezone.utc)
+    await session.flush()
+
+
+async def mark_invoice_expired(session: AsyncSession, invoice: Invoice) -> None:
+    """Mark an invoice expired."""
+    invoice.status = InvoiceStatus.EXPIRED.value
+    await session.flush()
+
+
+async def apply_tier_upgrade(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    tier: str,
+    invoice_id: str,
+    tx_hash: str,
+    period_end: datetime,
+) -> Subscription | None:
+    """Upgrade a user's subscription to a paid tier after a confirmed payment."""
+    result = await session.execute(
+        select(Subscription).where(Subscription.user_id == user_id)
+    )
+    subscription = result.scalar_one_or_none()
+    if subscription is None:
+        subscription = Subscription(user_id=user_id)
+        session.add(subscription)
+
+    subscription.tier = tier
+    subscription.status = "active"
+    subscription.last_invoice_id = invoice_id
+    subscription.last_tx_hash = tx_hash
+    subscription.current_period_start = datetime.now(timezone.utc)
+    subscription.current_period_end = period_end
+    await session.flush()
+    return subscription

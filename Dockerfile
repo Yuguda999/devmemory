@@ -14,18 +14,19 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies first (cached layer — only re-runs when lockfile changes).
-# --extra postgres pulls in asyncpg so the image can talk to managed Postgres.
+# --extra postgres pulls in asyncpg so the image can talk to managed Postgres;
+# --extra cardano pulls in bip_utils for HD payment-address derivation.
 # LICENSE is required because pyproject sets license-files = ["LICENSE"];
 # the build backend globs for it when building the wheel.
 COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev --extra postgres
+    uv sync --frozen --no-install-project --no-dev --extra postgres --extra cardano
 
 # Install the project itself (--no-editable copies it into the venv so the
 # runtime stage needs only /opt/venv, not the source tree).
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable --extra postgres
+    uv sync --frozen --no-dev --no-editable --extra postgres --extra cardano
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime

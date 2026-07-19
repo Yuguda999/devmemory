@@ -1,143 +1,11 @@
 import { api, state } from '../api.js';
 import { icon, toast, spinner, copyText } from '../utils.js';
+import { TOOLS, PROMPTS, tomlSnippet as _tomlSnippet, mcpJsonSnippet as _mcpJsonSnippet } from '../toolsData.js';
 
-// ── Tool definitions — icons served from /static/icons/ ──────────────────────
-
-function tomlSnippet(apiKey) {
-  return `[mcp_servers.devmemory]
-command = "devmemory"
-
-[mcp_servers.devmemory.env]
-DEVMEMORY_API_KEY = "${apiKey || 'dm_key_YOUR_KEY_HERE'}"
-DEVMEMORY_HOST = "${window.location.origin}"`;
-}
-const TOOLS = [
-  {
-    slug: 'claude-code',
-    name: 'Claude Code',
-    desc: "Anthropic's CLI coding agent",
-    color: '#D97757',
-    icon: '/static/icons/claude-code.svg',
-    iconBg: 'rgba(217,119,87,0.12)',
-    configs: {
-      'Linux / macOS': '~/.claude.json',
-      'Windows': '%USERPROFILE%\\.claude.json',
-    },
-    cli: 'claude mcp add devmemory devmemory -e DEVMEMORY_API_KEY={{API_KEY}} -e DEVMEMORY_HOST={{HOST}} -s user',
-  },
-  {
-    slug: 'cursor',
-    name: 'Cursor',
-    desc: 'AI-first code editor',
-    color: '#ffffff',
-    icon: '/static/icons/cursor.svg',
-    iconBg: 'rgba(255,255,255,0.08)',
-    configs: {
-      'Linux / macOS': '~/.cursor/mcp.json',
-      'Windows': '%USERPROFILE%\\.cursor\\mcp.json',
-    },
-  },
-  {
-    slug: 'windsurf',
-    name: 'Windsurf',
-    desc: "Codeium's AI IDE",
-    color: '#ffffff',
-    icon: '/static/icons/windsurf.svg',
-    iconBg: 'rgba(255,255,255,0.08)',
-    configs: {
-      'Linux / macOS': '~/.codeium/windsurf/mcp_config.json',
-      'Windows': '%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json',
-    },
-  },
-  {
-    slug: 'augment',
-    name: 'Augment Code',
-    desc: 'VS Code AI extension',
-    color: '#7C5CFC',
-    icon: '/static/icons/augment.png',
-    iconBg: 'rgba(124,92,252,0.12)',
-    configs: {
-      'Linux / macOS': '~/.augment/settings.json',
-      'Windows': '%APPDATA%\\augment\\settings.json',
-    },
-    hook: true,
-  },
-  {
-    slug: 'antigravity',
-    name: 'Antigravity',
-    desc: 'Google Gemini coding agent',
-    color: '#4285F4',
-    icon: '/static/icons/antigravity.svg',
-    iconBg: 'rgba(66,133,244,0.12)',
-    configs: {
-      'All platforms': '~/.gemini/antigravity/mcp_config.json',
-    },
-  },
-  {
-    slug: 'cline',
-    name: 'Cline',
-    desc: 'VS Code MCP extension',
-    color: '#ffffff',
-    icon: '/static/icons/cline.svg',
-    iconBg: 'rgba(255,255,255,0.08)',
-    configs: {
-      'Linux': '~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json',
-      'macOS': '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json',
-      'Windows': '%APPDATA%\\Code\\User\\globalStorage\\saoudrizwan.claude-dev\\settings\\cline_mcp_settings.json',
-    },
-  },
-  {
-    slug: 'kilo',
-    name: 'Kilo Code',
-    desc: 'AI coding assistant',
-    color: '#ffffff',
-    icon: '/static/icons/kilo.svg',
-    iconBg: 'rgba(255,255,255,0.08)',
-    configs: {
-      'Linux / macOS': '~/.config/kilo/kilo.jsonc',
-      'Windows': '%USERPROFILE%\\.config\\kilo\\kilo.jsonc',
-    },
-  },
-  {
-    slug: 'codex',
-    name: 'Codex CLI',
-    desc: "OpenAI's agentic coding CLI",
-    color: '#ffffff',
-    icon: '/static/icons/codex.svg',
-    iconBg: 'rgba(255,255,255,0.08)',
-    configFormat: 'toml',
-    configs: {
-      'Linux / macOS': '~/.codex/config.toml',
-      'Windows': '%USERPROFILE%\\.codex\\config.toml',
-    },
-    cli: 'codex mcp add devmemory --command devmemory --env DEVMEMORY_API_KEY={{API_KEY}} --env DEVMEMORY_HOST={{HOST}}',
-  },
-  {
-    slug: 'claude-desktop',
-    name: 'Claude Desktop',
-    desc: 'Claude Desktop app',
-    color: '#D97757',
-    icon: '/static/icons/claude-desktop.svg',
-    iconBg: 'rgba(217,119,87,0.12)',
-    configs: {
-      'macOS': '~/Library/Application Support/Claude/claude_desktop_config.json',
-      'Linux': '~/.config/Claude/claude_desktop_config.json',
-      'Windows': '%APPDATA%\\Claude\\claude_desktop_config.json',
-    },
-  },
-];
-
-
-function mcpJsonSnippet(apiKey) {
-  return JSON.stringify({
-    mcpServers: {
-      devmemory: {
-        command: 'devmemory',
-        env: { DEVMEMORY_API_KEY: apiKey || 'dm_key_YOUR_KEY_HERE', DEVMEMORY_HOST: window.location.origin }
-      }
-    }
-  }, null, 2);
-}
+// Tool metadata + config snippets are shared with the public docs page via
+// ../toolsData.js. In-app we bind the host to the current origin.
+const tomlSnippet = (apiKey) => _tomlSnippet(window.location.origin, apiKey);
+const mcpJsonSnippet = (apiKey) => _mcpJsonSnippet(window.location.origin, apiKey);
 
 function copyToClipboard(text) {
   // Delegates to the shared helper, which falls back to execCommand on
@@ -191,10 +59,12 @@ export async function renderSetup(container) {
             <div class="step-body">
               <div class="step-title">Install DevMemory</div>
               <div class="step-code">
-                <code>pip install devmemory-ai</code>
-                <button class="code-copy-btn" data-copy="pip install devmemory-ai">${icon('copy', 13)}</button>
+                <code>npx -y @commanderzero/devmemory@latest --help</code>
+                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory@latest --help">${icon('copy', 13)}</button>
               </div>
-              <div class="step-alt"><strong>Prefer Node?</strong> Nothing to install — use <code>npx -y @commanderzero/devmemory</code> in step 3. &nbsp;·&nbsp; Python alts: <code>uv tool install devmemory-ai</code>, <code>pipx install devmemory-ai</code></div>
+              <div class="step-alt"><strong>Node path — nothing to install.</strong> Prefer Python? <code>pipx install devmemory-ai</code> or <code>uv tool install devmemory-ai</code> (both isolate for you). Plain <code>pip install devmemory-ai</code> works too, but needs a virtual environment on PEP 668 systems (modern Debian/Ubuntu).</div>
+              <div class="step-alt"><strong>Runner vs. permanent command.</strong> <code>npx</code> and <code>uvx</code> run once and leave no command behind — great for setup, but then <code>devmemory start</code> won't exist. For a permanent <code>devmemory</code> on your PATH, install it once: <code>npm install -g @commanderzero/devmemory</code> (Node) or <code>pipx install devmemory-ai</code> (Python).</div>
+              <div class="step-alt"><strong>Any OS</strong> — Linux, macOS, Windows. Needs only <strong>Node ≥ 18</strong> (for <code>npx</code>/<code>npm</code>) <strong>or</strong> <strong>Python 3.10+</strong> (for <code>uvx</code>/<code>pipx</code>). No compiler, no system libraries. Most portable path: the <code>npx</code> command below → restart your tool.</div>
             </div>
           </div>
 
@@ -220,28 +90,69 @@ export async function renderSetup(container) {
             <div class="step-body">
               <div class="step-title">Install for your AI tool</div>
               <div class="step-code">
+                <code>npx -y @commanderzero/devmemory@latest install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
+                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory@latest install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
+              </div>
+              <div class="step-alt">…or with Python, if you installed via pipx / uv tool:</div>
+              <div class="step-code">
                 <code>devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
                 <button class="code-copy-btn" data-copy="devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
               </div>
-              <div class="step-alt">…or with Node — no Python needed:</div>
-              <div class="step-code">
-                <code>npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}</code>
-                <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory install --tool cursor --api-key YOUR_KEY --host ${window.location.origin}">${icon('copy', 13)}</button>
-              </div>
               <div class="step-alt">Use <code>--tool all</code> to configure every detected tool at once. <code>--host</code> points the client at this server.</div>
+              <div class="step-alt"><strong>Hitting <code>bad interpreter: …python3: No such file or directory</code>?</strong> Your Python <code>devmemory</code> shim points at an interpreter that was deleted or moved (common after a <code>uv</code>/<code>pipx</code> Python upgrade). Use the <code>npx</code> command above (it has no shim and can't dangle), or rebuild the shim with <code>uv tool install --reinstall devmemory-ai</code>.</div>
             </div>
           </div>
 
           <div class="setup-step">
             <div class="step-indicator">
-              <span class="step-number last">4</span>
+              <span class="step-number">4</span>
+              <div class="step-line"></div>
+            </div>
+            <div class="step-body">
+              <div class="step-title">Attach the project you're working on</div>
+              <div class="step-code">
+                <code>devmemory start</code>
+                <button class="code-copy-btn" data-copy="devmemory start">${icon('copy', 13)}</button>
+              </div>
+              <div class="step-alt"><strong>No <code>devmemory</code> command?</strong> If you set up with <code>npx</code>/<code>uvx</code> there's no permanent command — either prefix it (<code>npx -y @commanderzero/devmemory@latest start</code>) or install once with <code>npm install -g @commanderzero/devmemory</code> (see step 1). Still <em>command not found</em> after a global install? npm's global bin dir isn't on your PATH — on Linux use a user prefix once: <code>npm config set prefix ~/.local</code> then re-run the install (no <code>sudo</code>).</div>
+              <div class="step-alt">Run inside the project you're working on. DevMemory attaches to <strong>that one project</strong>, restores its saved context, and auto-saves as you work — nothing is saved until you attach. Runs as long as you're coding; idle gaps are fine.<br><strong>Or skip the terminal:</strong> in the tool itself, just say <strong>“continue”</strong> (or “start on this project”) — the agent attaches the open folder's project and restores it via <code>continue_here</code>. Works in every connected tool.</div>
+            </div>
+          </div>
+
+          <div class="setup-step">
+            <div class="step-indicator">
+              <span class="step-number last">5</span>
             </div>
             <div class="step-body" style="padding-bottom:0">
-              <div class="step-title">Restart your tool — done</div>
-              <div class="step-alt">DevMemory saves and restores context automatically across all your tools.</div>
+              <div class="step-title">Switch tools anytime</div>
+              <div class="step-code">
+                <code>devmemory continue</code>
+                <button class="code-copy-btn" data-copy="devmemory continue">${icon('copy', 13)}</button>
+              </div>
+              <div class="step-alt">Open the same project in another tool and run this — your context loads there and saving resumes from the new tool. End with <code>devmemory stop</code>.</div>
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ── Prompts to paste ───────────────────────────────────── -->
+      <div class="card setup-section">
+        <div class="setup-section-header">
+          <div class="setup-section-icon">${icon('message-square', 18)}</div>
+          <div>
+            <h3>Prompts to paste</h3>
+          </div>
+        </div>
+        <div class="step-alt" style="margin-bottom:14px">No commands to memorise — say one of these to your AI tool and it drives DevMemory for the project folder you have open.</div>
+        ${PROMPTS.map(p => `
+          <div style="margin-bottom:14px">
+            <div class="step-title" style="margin-bottom:6px">${escHtml(p.label)}</div>
+            <div class="step-code">
+              <code>${escHtml(p.text)}</code>
+              <button class="code-copy-btn" data-copy="${escHtml(p.text)}">${icon('copy', 13)}</button>
+            </div>
+          </div>`).join('')}
+        <div class="step-alt" style="margin-top:4px">For “switch to another project”, replace <code>PROJECT_NAME</code> with the project's name. Works in any MCP-connected tool.</div>
       </div>
 
       <!-- ── Supported Tools ────────────────────────────────────── -->
@@ -261,6 +172,7 @@ export async function renderSetup(container) {
                 <div class="tool-row-name">${t.name}</div>
                 <div class="tool-row-desc">${t.desc}</div>
               </div>
+              ${t.sync ? `<span class="sync-badge${t.sync.tone === 'auto' ? ' auto' : ''}" style="margin-right:8px">${t.sync.badge}</span>` : ''}
               <div class="tool-row-arrow">${icon('chevron-right', 15)}</div>
             </button>
           `).join('')}
@@ -298,26 +210,45 @@ export async function renderSetup(container) {
           </div>
         </div>
 
+        <div class="step-alt" style="margin-bottom:14px">
+          <strong>Opt-in, one project at a time.</strong> Attach a project either from the terminal (<code>devmemory start</code>) or by saying <strong>“continue”</strong> in the tool itself (the agent attaches the open folder via <code>continue_here</code>) — nothing is saved until you attach. Move to another tool with <code>devmemory continue</code> or just say “continue” there, end with <code>devmemory stop</code>, check state with <code>devmemory status</code>. The mechanisms below are <em>how</em> each tool captures turns once attached.
+        </div>
+
         <div class="sync-methods">
           <div class="sync-method">
             <div class="sync-method-label">
+              <span class="sync-badge auto">HOOK</span>
+              Tool-fired hook
+            </div>
+            <div class="step-alt">The tool itself fires a hook that hands us a plaintext transcript — deterministic, no daemon. <code>devmemory install</code> wires it. <strong>Claude Code</strong>, <strong>Windsurf</strong>, <strong>Augment</strong>.</div>
+          </div>
+          <div class="sync-method">
+            <div class="sync-method-label">
+              <span class="sync-badge auto">WATCH</span>
+              Watch daemon
+            </div>
+            <div class="step-alt">For tools with no hook, <code>devmemory start</code> launches a background daemon that tails the tool's local store. <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Kilo</strong>, <strong>Codex</strong>, and <strong>Claude Code</strong> (fallback via <code>~/.claude/projects</code>). Run <code>devmemory watch --list</code> to see what's detected.</div>
+          </div>
+          <div class="sync-method">
+            <div class="sync-method-label">
+              <span class="sync-badge">MCP + RULES</span>
+              Agent-driven
+            </div>
+            <div class="step-alt">Say <strong>“continue”</strong> (or “start on this project”) and the agent calls <code>continue_here</code> for the open folder — attaching that project and restoring it — then saves via the MCP tools as you work, driven by an always-on rules file. Works in any MCP tool. <strong>Antigravity</strong> (<code>~/.gemini/GEMINI.md</code>), <strong>Claude Desktop</strong>.</div>
+          </div>
+          <div class="sync-method">
+            <div class="sync-method-label">
               <span class="sync-badge">CLI</span>
-              Manual Inject
+              Manual inject
             </div>
             <div class="step-code">
               <code>devmemory inject --cwd /path/to/project</code>
               <button class="code-copy-btn" data-copy="devmemory inject --cwd /path/to/project">${icon('copy', 13)}</button>
             </div>
-            <div class="step-alt">Writes to <code>CLAUDE.md</code> and <code>.augment/rules/devmemory.md</code></div>
-          </div>
-          <div class="sync-method">
-            <div class="sync-method-label">
-              <span class="sync-badge auto">AUTO</span>
-              Augment SessionStart Hook
-            </div>
-            <div class="step-alt"><code>devmemory install --tool augment</code> adds a hook that loads context automatically every session.</div>
+            <div class="step-alt">Writes context to <code>CLAUDE.md</code> and <code>.augment/rules/devmemory.md</code> on demand.</div>
           </div>
         </div>
+        <div class="step-alt" style="margin-top:12px">Windsurf and Antigravity encrypt conversations on disk — Windsurf is captured via the plaintext transcript its hook provides; Antigravity has no verified per-turn hook, so it saves/restores through the MCP tools + rules.</div>
       </div>
 
       <!-- ── Connection Status ──────────────────────────────────── -->
@@ -388,7 +319,7 @@ function showToolDetail(slug, apiKey) {
   const snippet = isToml ? tomlSnippet(apiKey) : mcpJsonSnippet(apiKey);
   const configLabel = isToml ? 'TOML Configuration (~/.codex/config.toml)' : 'JSON Configuration';
   const cliInstall = `devmemory install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
-  const npxInstall = `npx -y @commanderzero/devmemory install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
+  const npxInstall = `npx -y @commanderzero/devmemory@latest install --tool ${t.slug} --api-key YOUR_KEY --host ${window.location.origin}`;
 
   const configRows = Object.entries(t.configs).map(([os, path]) => `
     <div class="config-path-row">
@@ -426,6 +357,14 @@ function showToolDetail(slug, apiKey) {
           <code>${escHtml(npxInstall)}</code>
           <button class="code-copy-btn" data-copy="${escHtml(npxInstall)}">${icon('copy', 13)}</button>
         </div>
+        ${t.slug === 'claude-code' ? `
+        <div class="step-alt" style="margin-top:12px"><strong>Multiple Claude profiles?</strong> Claude Code reads <code>$CLAUDE_CONFIG_DIR/.claude.json</code> when that env var is set. Install into several with <code>--config-dir</code> — a <strong>comma-separated list, no spaces</strong>:</div>
+        <div class="step-code lg">
+          <code>npx -y @commanderzero/devmemory@latest install --tool claude-code --api-key YOUR_KEY --host ${window.location.origin} --config-dir ~/.claudeA,~/.claudeB,~/.claude</code>
+          <button class="code-copy-btn" data-copy="npx -y @commanderzero/devmemory@latest install --tool claude-code --api-key YOUR_KEY --host ${window.location.origin} --config-dir ~/.claudeA,~/.claudeB,~/.claude">${icon('copy', 13)}</button>
+        </div>
+        <div class="step-alt"><strong>Commas only — no spaces</strong> (a space splits the list in your shell → <code>Unknown option '--config-dir'</code>). Pin <code>@latest</code> so <code>npx</code> can't serve a stale cached build; <code>--config-dir</code> needs <strong>≥ 0.3.3</strong>.</div>
+        ` : ''}
       </div>
 
       ${t.cli ? `
@@ -452,10 +391,22 @@ function showToolDetail(slug, apiKey) {
         </div>
       </div>
 
-      ${t.hook ? `
+      ${t.sync ? `
+      <div class="detail-method">
+        <div class="detail-method-label">
+          <span class="method-badge${t.sync.tone === 'auto' ? ' recommended' : ''}">${t.sync.badge}</span>
+          Context sync
+        </div>
+        <div class="detail-note">
+          <div class="detail-note-icon">${icon('info', 14)}</div>
+          <div class="detail-note-text">${t.sync.text}</div>
+        </div>
+      </div>` : ''}
+
+      ${t.note ? `
       <div class="detail-note">
         <div class="detail-note-icon">${icon('info', 14)}</div>
-        <div class="detail-note-text">The install command also adds a <strong>SessionStart hook</strong> that injects your project context automatically on every new Augment session — no manual steps needed.</div>
+        <div class="detail-note-text">${t.note}</div>
       </div>` : ''}
 
       ${isToml ? `

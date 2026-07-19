@@ -2,7 +2,7 @@
 
 Tier limits
 -----------
-- FREE  : 3 projects, 10 sessions per project, 500 context blocks per session
+- FREE  : 10 projects, 30 sessions per project, 1500 context blocks per session
 - PRO   : 25 projects, 100 sessions per project, 5 000 context blocks per session
 - TEAM  : unlimited (capped only by DB sanity limits)
 
@@ -44,9 +44,13 @@ class TierQuota:
 
 _TIER_QUOTAS: dict[str, TierQuota] = {
     SubscriptionTier.FREE.value: TierQuota(
-        max_projects=3,
-        max_sessions_per_project=10,
-        max_blocks_per_session=500,
+        # Personal single-tenant deployment: the per-turn Stop hook and
+        # multi-project use across tools make the original 3/10/500 caps too
+        # tight. Kept as a named tier rather than switched to _UNLIMITED so the
+        # billing dashboard still shows finite numbers.
+        max_projects=10,
+        max_sessions_per_project=30,
+        max_blocks_per_session=1500,
     ),
     SubscriptionTier.PRO.value: TierQuota(
         max_projects=25,

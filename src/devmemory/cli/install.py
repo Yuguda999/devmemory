@@ -47,6 +47,27 @@ def _appdata() -> str:
     return os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
 
 
+def _claude_config_dirs(explicit: str | None = None) -> list[Path]:
+    """Return the Claude Code config dirs to install into.
+
+    Claude Code honors the CLAUDE_CONFIG_DIR env var. When set, its config files
+    move OUT of the defaults (~/.claude.json and ~/.claude/settings.json) and
+    into <dir>/.claude.json and <dir>/settings.json. Installs that ignore this
+    write to files Claude never reads, so the MCP server and hooks silently never
+    load.
+
+    Both CLAUDE_CONFIG_DIR and the ``--config-dir`` flag may list several dirs,
+    comma-separated — a user with multiple profiles (e.g. ~/.claude-work,
+    ~/.claude-personal) gets one install per dir. ``explicit`` (from --config-dir)
+    wins over the env var. Returns [] when neither is set, meaning "use the
+    platform default (~/.claude.json)".
+    """
+    raw = explicit if explicit else os.environ.get("CLAUDE_CONFIG_DIR")
+    if not raw:
+        return []
+    return [Path(p.strip()).expanduser() for p in raw.split(",") if p.strip()]
+
+
 TOOLS: dict[str, ToolConfig] = {
     "claude-code": ToolConfig(
         name="Claude Code",
@@ -109,6 +130,8 @@ TOOLS: dict[str, ToolConfig] = {
             "Darwin": "~/.gemini/antigravity/mcp_config.json",
             "Windows": "~/.gemini/antigravity/mcp_config.json",
         },
+        has_hook=True,
+        notes="MCP tools + ~/.gemini/GEMINI.md global rules drive save/restore (no verified per-turn IDE hook).",
     ),
     "cline": ToolConfig(
         name="Cline (VS Code)",
@@ -162,8 +185,13 @@ def _build_mcp_entry(api_key: str, client: str | None = None, host: str | None =
     if host:
         env["DEVMEMORY_HOST"] = host
 
+    # Pass the explicit "mcp" subcommand rather than relying on bare-invocation
+    # defaulting to the stdio server. Both install channels (this CLI and the npm
+    # client) now launch with the same verb, so a config written by one channel
+    # cannot silently fail against a binary installed by the other.
     return {
         "command": command,
+        "args": ["mcp"],
         "env": env,
     }
 
@@ -171,8 +199,22 @@ def _build_mcp_entry(api_key: str, client: str | None = None, host: str | None =
 # ── Config File Operations ────────────────────────────────────────────────────
 
 
-def _resolve_config_path(tool: ToolConfig) -> Path:
-    """Resolve the config file path for the current OS."""
+def _resolve_config_path(tool: ToolConfig, config_dir: Path | None = None) -> Path:
+    """Resolve the config file path for the current OS.
+
+    For claude-code, ``config_dir`` targets a specific Claude profile dir (so a
+    caller looping over several profiles can pin each one); when omitted, the
+    first CLAUDE_CONFIG_DIR entry is used, else the platform default.
+    """
+    # Claude Code relocates ~/.claude.json to $CLAUDE_CONFIG_DIR/.claude.json
+    # when that env var is set. Honor it so we write where Claude actually reads.
+    if tool.slug == "claude-code":
+        if config_dir is not None:
+            return config_dir / ".claude.json"
+        dirs = _claude_config_dirs()
+        if dirs:
+            return dirs[0] / ".claude.json"
+
     os_name = platform.system()
     template = tool.config_paths.get(os_name)
     if template is None:
@@ -247,16 +289,28 @@ def _add_augment_hook(config: dict) -> dict:
 _DEVMEMORY_RULES_CONTENT = """\
 # DevMemory — Persistent Dev Memory
 
-You have access to DevMemory MCP tools. Use them proactively throughout every session:
+You have access to DevMemory MCP tools. They keep the user's work context alive
+across tool switches and credit resets. Use them proactively — do NOT wait to be asked.
 
-- **SESSION START**: Call `get_context` (or `generate_resume_prompt`) to restore prior context.
-- **AFTER EVERY CODE CHANGE**: Call `save_context` with block_type='code' summarising what changed.
-- **AFTER EVERY KEY DECISION**: Call `save_context` with block_type='decision'.
-- **ON EVERY ERROR**: Call `save_context` with block_type='error'.
-- **BEFORE ENDING**: Call `save_context` with block_type='next_step' so work can resume elsewhere.
+Every DevMemory tool takes a `cwd` argument that picks WHICH PROJECT you act on.
+**Always pass the absolute path of the project folder currently open in this tool.**
+That folder IS the project — DevMemory resolves it (git remote or folder name)
+automatically, so the user never has to name a project.
+
+- **WHEN THE USER SAYS "start", "continue", "resume", or "pick up where we left off"**
+  (or at the start of any session on an existing project): call **`continue_here`**
+  with `cwd` = the open project folder. ONE call attaches auto-save to this project
+  AND returns the prior context to read. Prefer it over `get_context` — nothing is
+  saved until a project is attached this way.
+- **AFTER EVERY CODE CHANGE**: `save_context` block_type='code' (with the same `cwd`).
+- **AFTER EVERY KEY DECISION**: `save_context` block_type='decision'.
+- **ON EVERY ERROR**: `save_context` block_type='error'.
+- **BEFORE ENDING**: `save_context` block_type='next_step' so work can resume elsewhere.
+
+If the user wants a different project than the open folder, pass `project="<name>"`
+explicitly. To see what exists, call `list_projects`.
 
 This ensures context survives when the user switches AI tools or runs out of credits.
-Do NOT wait to be asked — save context automatically after every meaningful action.
 """
 
 
@@ -280,49 +334,17 @@ def _add_cursor_hook() -> Path:
 
 
 def _add_windsurf_hook() -> Path:
-    """Write DevMemory instructions to Windsurf's global memories directory.
+    """Write DevMemory instructions to Windsurf's global rules file.
 
-    Windsurf reads files from ``~/.codeium/windsurf/memories/`` at session start,
-    making this the equivalent of a SessionStart hook.
+    Windsurf reads ``~/.codeium/windsurf/memories/global_rules.md`` on every
+    session across all workspaces (always-on, 6000-char cap) — the documented
+    global-rules mechanism, our SessionStart equivalent.
     """
     memories_dir = Path.home() / ".codeium" / "windsurf" / "memories"
     memories_dir.mkdir(parents=True, exist_ok=True)
-    path = memories_dir / "devmemory_instructions.md"
+    path = memories_dir / "global_rules.md"
     path.write_text(_DEVMEMORY_RULES_CONTENT, encoding="utf-8")
     return path
-
-
-def _add_windsurf_cascade_hook() -> Path:
-    """Wire DevMemory into Windsurf's Cascade hooks.json.
-
-    Windsurf's Cascade hooks fire at the OS level — not by AI judgment.
-    We add a post-hook that runs ``devmemory inject`` after every agent
-    message, ensuring context files are always fresh.
-    """
-    hooks_path = Path.home() / ".codeium" / "windsurf" / "hooks.json"
-    hooks_path.parent.mkdir(parents=True, exist_ok=True)
-
-    config: dict = {}
-    if hooks_path.exists():
-        try:
-            config = json.loads(hooks_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            config = {}
-
-    if "post" not in config:
-        config["post"] = []
-
-    inject_cmd = "devmemory inject --tool windsurf 2>/dev/null || true"
-    already = any(
-        "devmemory inject" in (h.get("command") or h.get("cmd") or "")
-        for h in config["post"]
-        if isinstance(h, dict)
-    )
-    if not already:
-        config["post"].append({"type": "shell", "command": inject_cmd})
-
-    hooks_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    return hooks_path
 
 
 def _add_cline_hook() -> Path:
@@ -358,6 +380,162 @@ def _add_kilo_hook() -> Path:
         separator = "\n" if existing and not existing.endswith("\n") else ""
         path.write_text(existing + separator + _DEVMEMORY_RULES_CONTENT, encoding="utf-8")
 
+    return path
+
+
+# ── Transcript-based hooks (OS-level, no AI judgment) ───────────────────────────
+
+# Tools without a per-turn transcript hook — they need the watch daemon.
+_WATCH_TOOLS = {"cursor", "cline", "kilo"}
+
+
+def _package_hooks_dir() -> Path:
+    """Directory holding the shipped hook scripts (src/devmemory/hooks)."""
+    return Path(__file__).resolve().parent.parent / "hooks"
+
+
+def _copy_hook_scripts() -> Path:
+    """Copy ALL shipped hook scripts into ~/.devmemory/hooks/ and return the dir.
+
+    Always overwrites so an upgrade picks up fixes. Scripts are stdlib-only and
+    run under the tool's own ``python3``, so they don't depend on the installed
+    devmemory package. One copy serves every tool's hook (Claude Code, Windsurf,
+    Antigravity) since they share ``_common.py``.
+    """
+    src = _package_hooks_dir()
+    dst = Path.home() / ".devmemory" / "hooks"
+    dst.mkdir(parents=True, exist_ok=True)
+    for s in src.glob("*.py"):
+        if s.name == "__init__.py":
+            continue
+        shutil.copyfile(s, dst / s.name)
+    return dst
+
+
+def _add_claude_code_hooks(hooks_dir: Path, config_dir: Path | None = None) -> Path:
+    """Merge DevMemory SessionStart + Stop hooks into Claude's settings.json.
+
+    Idempotent and non-destructive: preserves any existing hooks (other tools',
+    user's own) and only adds a DevMemory command if one isn't already present.
+
+    - SessionStart → session_start.py injects restored context on startup.
+    - Stop         → stop_save.py snapshots each turn (runs regardless of whether
+                     the model called save_context, so nothing is ever lost).
+    """
+    # Same CLAUDE_CONFIG_DIR relocation applies to settings.json: with the env
+    # var (or --config-dir) set it lives at <dir>/settings.json, not
+    # ~/.claude/settings.json. config_dir pins a specific profile when looping.
+    base = config_dir
+    if base is None:
+        dirs = _claude_config_dirs()
+        base = dirs[0] if dirs else None
+    settings_path = (base / "settings.json") if base else (Path.home() / ".claude" / "settings.json")
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config: dict = {}
+    if settings_path.exists():
+        try:
+            config = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            config = {}
+
+    hooks = config.setdefault("hooks", {})
+
+    def _already(event: str, marker: str) -> bool:
+        for group in hooks.get(event, []):
+            if not isinstance(group, dict):
+                continue
+            for h in group.get("hooks", []):
+                if marker in (h.get("command") or ""):
+                    return True
+        return False
+
+    if not _already("SessionStart", "session_start.py"):
+        hooks.setdefault("SessionStart", []).append(
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'python3 "{hooks_dir / "session_start.py"}"',
+                        "timeout": 15,
+                        "statusMessage": "DevMemory: restoring context",
+                    }
+                ]
+            }
+        )
+
+    if not _already("Stop", "stop_save.py"):
+        hooks.setdefault("Stop", []).append(
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'python3 "{hooks_dir / "stop_save.py"}"',
+                        "timeout": 20,
+                        "async": True,
+                        "statusMessage": "DevMemory: saving turn",
+                    }
+                ]
+            }
+        )
+
+    settings_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return settings_path
+
+
+def _add_windsurf_transcript_hook(hooks_dir: Path) -> Path:
+    """Wire windsurf_save.py into Windsurf's post_cascade_response_with_transcript.
+
+    That hook fires after every Cascade response and writes the full conversation
+    to a JSONL file, handing us its path on stdin — so we capture each turn
+    deterministically without touching Windsurf's encrypted conversation store.
+    Idempotent; preserves any other hooks in the file.
+    """
+    hooks_path = Path.home() / ".codeium" / "windsurf" / "hooks.json"
+    hooks_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config: dict = {}
+    if hooks_path.exists():
+        try:
+            config = json.loads(hooks_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            config = {}
+
+    hooks = config.setdefault("hooks", {})
+    event = hooks.setdefault("post_cascade_response_with_transcript", [])
+    marker = "windsurf_save.py"
+    if not any(marker in (h.get("command") or "") for h in event if isinstance(h, dict)):
+        event.append(
+            {
+                "command": f'python3 "{hooks_dir / "windsurf_save.py"}"',
+                "show_output": False,
+            }
+        )
+
+    hooks_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return hooks_path
+
+
+def _add_antigravity_rules() -> Path:
+    """Write DevMemory instructions to Antigravity's global rules file.
+
+    Antigravity's IDE runs with ``--app_data_dir antigravity`` and reads
+    ``~/.gemini/GEMINI.md`` as its global (all-workspace) rules file at session
+    start, so this is our SessionStart/restore equivalent.
+
+    NOTE: Antigravity has no *verified* per-turn transcript hook we can wire
+    from an installer. Its documented hook surfaces are the SDK's Python
+    decorators (for SDK-built agents, not the IDE) and a `hooks.json` whose path
+    differs across builds. Rather than ship a hook that silently never fires, we
+    drive save/restore through the MCP tools + this always-on rules file. Append
+    (don't clobber) so a hand-written GEMINI.md is preserved.
+    """
+    path = Path.home() / ".gemini" / "GEMINI.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    if "devmemory" not in existing.lower():
+        separator = "\n" if existing and not existing.endswith("\n") else ""
+        path.write_text(existing + separator + _DEVMEMORY_RULES_CONTENT, encoding="utf-8")
     return path
 
 
@@ -433,8 +611,13 @@ def install_tool(
     api_key: str,
     host: str | None = None,
     dry_run: bool = False,
+    config_dir: Path | None = None,
 ) -> tuple[bool, str]:
     """Install DevMemory for a specific tool.
+
+    ``config_dir`` pins a specific Claude Code profile dir (used when looping
+    over several CLAUDE_CONFIG_DIR / --config-dir profiles); ignored by other
+    tools.
 
     Returns (success, message).
     """
@@ -443,7 +626,7 @@ def install_tool(
         valid = ", ".join(sorted(TOOLS.keys()))
         return False, f"Unknown tool '{tool_slug}'. Supported: {valid}"
 
-    config_path = _resolve_config_path(tool)
+    config_path = _resolve_config_path(tool, config_dir=config_dir)
     mcp_entry = _build_mcp_entry(api_key, client=tool.slug, host=host)
 
     if dry_run:
@@ -487,22 +670,30 @@ def install_tool(
         lines.append("   Cursor will load DevMemory instructions on every session automatically.")
 
     if tool.has_hook and tool.slug == "windsurf":
-        # Global memories (rules-based)
+        # Restore: global rules file (always-on across workspaces).
         mem_path = _add_windsurf_hook()
-        lines.append(f"   Global memories hook: written to {mem_path}")
-        # Cascade OS-level post-hook
-        cascade_path = _add_windsurf_cascade_hook()
-        lines.append(
-            f"   Cascade post-hook: written to {cascade_path} (fires after every agent message)."
-        )
+        lines.append(f"   Global rules: written to {mem_path} (auto-read every session)")
+        # Save: post_cascade_response_with_transcript hook → reads the JSONL
+        # transcript Windsurf writes per response and POSTs the turn (no reliance
+        # on the model, no need to read Windsurf's encrypted conversation store).
+        hooks_dir = _copy_hook_scripts()
+        cascade_path = _add_windsurf_transcript_hook(hooks_dir)
+        lines.append(f"   Cascade transcript hook: wired into {cascade_path}")
+        lines.append("   Each Cascade turn is saved automatically — no manual save_context needed.")
 
     if tool.has_hook and tool.slug == "claude-code":
-        # No OS-level hooks. Claude Code reads the MCP server's `instructions`
-        # (see devmemory.tools) and the MCP tools (save_context / get_context)
-        # are the intended flow. We deliberately do NOT wire Stop/PostToolUse
-        # hooks: the old ones appended to ./CLAUDE.md on every edit (unbounded
-        # spam) and overwrote the whole file on Stop (clobbering real content).
-        lines.append("   MCP tools drive save/restore — no CLAUDE.md file hooks installed.")
+        # OS-level hooks (no AI judgment) drive save/restore. These do NOT touch
+        # CLAUDE.md — the old CLAUDE.md hooks spammed the file on every edit and
+        # clobbered it on Stop. Instead: SessionStart injects context via
+        # hookSpecificOutput.additionalContext, and Stop POSTs each turn to the
+        # API so nothing is lost even when the model never calls save_context.
+        hooks_dir = _copy_hook_scripts()
+        settings_path = _add_claude_code_hooks(hooks_dir, config_dir=config_dir)
+        lines.append(f"   Hook scripts: {hooks_dir}")
+        lines.append(f"   SessionStart + Stop hooks: wired into {settings_path}")
+        lines.append(
+            "   Context saves/restores automatically every turn — no manual save_context needed."
+        )
 
     if tool.has_hook and tool.slug == "cline":
         cline_path = _add_cline_hook()
@@ -511,6 +702,23 @@ def install_tool(
     if tool.has_hook and tool.slug == "kilo":
         kilo_path = _add_kilo_hook()
         lines.append(f"   Global .kilocoderules: written to {kilo_path} (auto-read every session).")
+
+    if tool.has_hook and tool.slug == "antigravity":
+        # No verified per-turn transcript hook exists for the Antigravity IDE
+        # (see _add_antigravity_rules). Save/restore runs through the MCP tools,
+        # driven by an always-on global rules file.
+        ag_path = _add_antigravity_rules()
+        lines.append(f"   Global rules: written to {ag_path} (auto-read every session).")
+        lines.append("   Save/restore runs through the DevMemory MCP tools.")
+
+    # Tools with no per-turn transcript hook rely on the watch daemon to
+    # auto-save. Installing it once starts a background service that covers
+    # every supported local store (Cursor/Cline/Kilo/Codex + generic).
+    if tool.slug in _WATCH_TOOLS:
+        from devmemory.watch.service import install_service
+
+        ok, msg = install_service(host=host)
+        lines.append(f"   Auto-save daemon: {msg}" if ok else f"   ⚠️  watch service: {msg}")
 
     if tool.notes:
         lines.append(f"   💡 {tool.notes}")
@@ -551,8 +759,33 @@ def run_install(args) -> None:
 
     host = args.host if hasattr(args, "host") else None
 
+    # Persist host + key globally so `devmemory start/continue/inject` reach the
+    # right backend without re-passing flags (fixes the localhost fallback).
+    from devmemory.hooks._common import write_config
+
+    save_api_key(api_key)
+    write_config(host=host, api_key=api_key)
+
+    explicit_dirs = getattr(args, "config_dir", None)
+
     if args.tool == "all":
         result = install_all(api_key, host=host)
+    elif args.tool == "claude-code":
+        # A user may run several Claude profiles via CLAUDE_CONFIG_DIR (or pass
+        # --config-dir a,b,c). Install into each so every profile gets the MCP
+        # server + hooks. Empty list → one default install (~/.claude.json).
+        dirs = _claude_config_dirs(explicit_dirs)
+        targets: list[Path | None] = dirs if dirs else [None]
+        results = []
+        for target in targets:
+            ok, result = install_tool(
+                args.tool, api_key, host=host, dry_run=args.dry_run, config_dir=target
+            )
+            if not ok:
+                print(f"❌ {result}", file=sys.stderr)
+                sys.exit(1)
+            results.append(result)
+        result = "\n\n".join(results)
     else:
         ok, result = install_tool(args.tool, api_key, host=host, dry_run=args.dry_run)
         if not ok:

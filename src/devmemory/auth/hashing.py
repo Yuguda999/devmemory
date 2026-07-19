@@ -52,3 +52,20 @@ def generate_api_key() -> tuple[str, str]:
     raw_key = f"dm_key_{random_part}"
     prefix = raw_key[:12]  # "dm_key_a1b2c3"
     return raw_key, prefix
+
+
+# ── Email Token Hashing ────────────────────────────────────────
+
+# Email verification / password-reset tokens are high-entropy random strings
+# delivered by email. Only the SHA-256 digest is stored; the raw token lives
+# only in the emailed link (same reasoning as API keys — see above).
+
+
+def generate_email_token() -> str:
+    """Generate a high-entropy, URL-safe token for email links."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(raw_token: str) -> str:
+    """Hash a raw email token with SHA-256 for storage and lookup."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()

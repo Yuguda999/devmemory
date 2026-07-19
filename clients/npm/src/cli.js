@@ -25,11 +25,22 @@ function printHelp() {
 Usage:
   devmemory                                   Start the MCP server (stdio)
   devmemory mcp                               Start the MCP server (explicit)
-  devmemory install --tool <name>|--all --api-key <key> [--host <url>]
-  devmemory inject [--cwd <dir>] [--tool <name>] [--host <url>] [--api-key <key>]
+  devmemory install --tool <name>|--all --api-key <key> [--host <url>] [--config-dir <dir[,dir...]>]
+  devmemory start    [--cwd <dir>] [--tool <name>] [--host <url>] [--api-key <key>]
+  devmemory continue [--cwd <dir>] [--tool <name>] [--host <url>] [--api-key <key>]
+  devmemory stop
+  devmemory status
+  devmemory inject   [--cwd <dir>] [--tool <name>] [--host <url>] [--api-key <key>]
+
+Attach model:
+  start      Attach the current project, restore its context, begin saving.
+  continue   Re-attach the active project in a new tool and restore context.
+  stop       Detach (stop auto-saving).
+  status     Show the active session.
+  Note: the background watch daemon (store-based tools) is Python-only.
 
 Env:
-  DEVMEMORY_HOST      Backend URL (default http://localhost:8765)
+  DEVMEMORY_HOST      Backend URL (also read from ~/.devmemory/config.json)
   DEVMEMORY_API_KEY   API key (fallback when --api-key is omitted)`);
 }
 
@@ -48,6 +59,7 @@ async function main() {
         tool: { type: "string" },
         "api-key": { type: "string" },
         host: { type: "string" },
+        "config-dir": { type: "string" },
         all: { type: "boolean" },
       },
       allowPositionals: false,
@@ -57,7 +69,46 @@ async function main() {
       console.error(`❌ Specify --tool <${TOOL_SLUGS.join("|")}> or --all`);
       process.exit(1);
     }
-    runInstall({ tool, apiKey: values["api-key"], host: values.host });
+    runInstall({
+      tool,
+      apiKey: values["api-key"],
+      host: values.host,
+      configDir: values["config-dir"],
+    });
+    return;
+  }
+
+  if (cmd === "start" || cmd === "continue") {
+    const session = await import("./session.js");
+    const { values } = parseArgs({
+      args: rest,
+      options: {
+        cwd: { type: "string" },
+        tool: { type: "string" },
+        host: { type: "string" },
+        "api-key": { type: "string" },
+      },
+      allowPositionals: false,
+    });
+    const opts = {
+      cwd: values.cwd,
+      tool: values.tool,
+      host: values.host,
+      apiKey: values["api-key"],
+    };
+    await (cmd === "start" ? session.runStart(opts) : session.runContinue(opts));
+    return;
+  }
+
+  if (cmd === "stop") {
+    const { runStop } = await import("./session.js");
+    runStop();
+    return;
+  }
+
+  if (cmd === "status") {
+    const { runStatus } = await import("./session.js");
+    runStatus();
     return;
   }
 

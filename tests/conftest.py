@@ -2,15 +2,42 @@
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncGenerator
+import os
 
-import pytest
-import pytest_asyncio
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# Isolate the test suite from a developer's real configuration. The settings
+# singleton is built from environment + .env / ~/.devmemory/.env on first import
+# of ``devmemory.config`` (triggered by the imports below), so a real SendGrid
+# key, saas mode, admin allowlist, or Postgres URL would otherwise leak in and
+# make results depend on the machine. Real env vars take precedence over the
+# env_file in pydantic-settings, so pinning them here forces a clean, hermetic
+# config. MUST run before any ``devmemory`` import.
+os.environ.update(
+    {
+        "DEVMEMORY_DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "DEVMEMORY_DEPLOYMENT_MODE": "self-hosted",
+        "DEVMEMORY_SECRET_KEY": "test-secret-key-for-tests-only-min-32-bytes",
+        "DEVMEMORY_SENDGRID_API_KEY": "",
+        "DEVMEMORY_SMTP_HOST": "",
+        "DEVMEMORY_ADMIN_EMAILS": "",
+        "DEVMEMORY_BLOCKFROST_PROJECT_ID": "",
+        "DEVMEMORY_CARDANO_ACCOUNT_XPUB": "",
+        "DEVMEMORY_CARDANO_ALLOW_TEST_PAYMENTS": "false",
+    }
+)
 
-from devmemory.models import Base
+import asyncio  # noqa: E402
+from collections.abc import AsyncGenerator  # noqa: E402
+
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from sqlalchemy import event  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from devmemory.models import Base  # noqa: E402
 
 # Use an in-memory SQLite database for tests
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

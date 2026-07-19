@@ -8,6 +8,8 @@ import { z } from "zod";
 
 import { apiCall } from "./api.js";
 import { resolveProject } from "./git.js";
+import { writeActive } from "./store.js";
+import { syncNow } from "./watch/sync.js";
 
 const INSTRUCTIONS = [
   "DevMemory is the user's persistent memory layer. It ensures their work context",
@@ -29,7 +31,7 @@ const result = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj) }
 
 export function buildServer() {
   const server = new McpServer(
-    { name: "devmemory", version: "0.1.0" },
+    { name: "devmemory", version: "0.3.5" },
     { instructions: INSTRUCTIONS },
   );
 
@@ -190,6 +192,76 @@ export function buildServer() {
         `/sessions/${encodeURIComponent(a.session_id)}/resume`,
         { apiKey: a.api_key, params: { target_tool: a.target_tool ?? "generic" } },
       )),
+  );
+
+  server.tool(
+    "continue_here",
+    "Attach DevMemory to THIS project and load its saved context. Call at session " +
+      "start or when the user says 'continue'/'resume'/'pick up where we left off'.",
+    {
+      cwd: z.string().describe("Working directory — resolved locally to a project"),
+      tool_source: z.string().optional(),
+      api_key: z.string().optional(),
+    },
+    async (a) => {
+      const tool = a.tool_source || "unknown";
+      const proj = resolveProject(a.cwd);
+
+      // Attach: write the shared marker so background auto-save scopes to this
+      // project. Best-effort — a failure must not block the restore.
+      let attached = false;
+      try {
+        writeActive(proj, tool);
+        attached = true;
+      } catch {
+        /* marker is best-effort */
+      }
+
+      // On-demand sync: scan local tool stores for THIS project and push new
+      // turns to the backend — no persistent daemon required. Fire-and-forget:
+      // the MCP server is long-lived, so this drains in the background without
+      // stalling the restore (a large first-run backlog could take minutes).
+      try {
+        syncNow(proj.slug, a.api_key).catch(() => {});
+      } catch {
+        /* sync is strictly best-effort */
+      }
+
+      const sess = await apiCall("GET", "/sessions", {
+        apiKey: a.api_key,
+        params: { project_slug: proj.slug, status: "active", limit: 1 },
+      });
+      if (sess.ok === false) return result(sess);
+      const sessions = sess.sessions || [];
+      if (!sessions.length) {
+        return result({
+          ok: true,
+          attached,
+          project: proj.name,
+          has_context: false,
+          message:
+            `Attached to '${proj.name}' — auto-save is now scoped to this project. ` +
+            "No prior session to restore; starting fresh.",
+        });
+      }
+      const sessionId = sessions[0].id;
+      const resume = await apiCall("GET", `/sessions/${encodeURIComponent(sessionId)}/resume`, {
+        apiKey: a.api_key,
+        params: { target_tool: tool },
+      });
+      if (resume.ok === false) return result(resume);
+      return result({
+        ok: true,
+        attached,
+        project: proj.name,
+        session_id: sessionId,
+        has_context: resume.has_context ?? true,
+        prompt: resume.prompt,
+        message:
+          `Attached to '${proj.name}' and loaded prior context. ` +
+          "Read the prompt below to continue where you left off.",
+      });
+    },
   );
 
   server.tool(

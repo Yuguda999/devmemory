@@ -4,6 +4,8 @@ from devmemory.models.api_key import ApiKey
 from devmemory.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from devmemory.models.connection import ToolConnection
 from devmemory.models.context import BlockType, ContextBlock
+from devmemory.models.email_token import EmailToken, EmailTokenPurpose
+from devmemory.models.invoice import Invoice, InvoiceStatus
 from devmemory.models.project import Project
 from devmemory.models.session import Session, SessionStatus
 from devmemory.models.subscription import Subscription, SubscriptionStatus, SubscriptionTier
@@ -24,4 +26,8 @@ __all__ = [
     "ContextBlock",
     "BlockType",
     "ToolConnection",
+    "EmailToken",
+    "EmailTokenPurpose",
+    "Invoice",
+    "InvoiceStatus",
 ]

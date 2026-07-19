@@ -11,24 +11,37 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _normalize_asyncpg_url(url: str) -> str:
-    """Rewrite libpq query params into asyncpg-compatible ones.
+    """Rewrite libpq query params into asyncpg-compatible ones and force TLS.
 
     Managed Postgres providers (Neon, Supabase) hand out URLs ending in
-    ``?sslmode=require&channel_binding=require``. asyncpg rejects ``sslmode``
-    and ``channel_binding`` as connect params, but SQLAlchemy's asyncpg dialect
-    honours ``?ssl=require`` (verified). So translate ``sslmode`` → ``ssl`` and
-    drop ``channel_binding``. The result works uniformly for both the app engine
-    and Alembic, which each build their own engine from this URL.
+    ``?sslmode=require&channel_binding=require`` — or, in Supabase's case, often
+    with no ssl param at all. asyncpg rejects ``sslmode``/``channel_binding`` as
+    connect params, but SQLAlchemy's asyncpg dialect honours ``?ssl=require``
+    (verified). So we translate ``sslmode`` → ``ssl``, drop ``channel_binding``,
+    and — for any non-local host — ensure ``ssl=require`` is present so a pasted
+    Supabase/Neon URL just works without TLS having to be spelled out. The result
+    works uniformly for both the app engine and Alembic (separate engines).
     """
     parts = urlsplit(url)
-    if not parts.query:
-        return url
     out: list[tuple[str, str]] = []
+    has_ssl = False
     for k, v in parse_qsl(parts.query, keep_blank_values=True):
         kl = k.lower()
         if kl == "channel_binding":
             continue
-        out.append(("ssl", v) if kl == "sslmode" else (k, v))
+        if kl in ("sslmode", "ssl"):
+            has_ssl = True
+            out.append(("ssl", v))
+        else:
+            out.append((k, v))
+
+    host = (parts.hostname or "").lower()
+    is_local = host in ("localhost", "127.0.0.1", "::1", "")
+    if not has_ssl and not is_local:
+        out.append(("ssl", "require"))
+
+    if not out:
+        return url
     return urlunsplit(parts._replace(query=urlencode(out)))
 
 
@@ -89,16 +102,76 @@ class Settings(BaseSettings):
     jwt_expiry_hours: int = 24
     jwt_algorithm: str = "HS256"
 
+    # Comma-separated emails that are always treated as superadmins (bootstrap).
+    # Anyone here gets admin access even if their DB ``is_admin`` flag is false —
+    # so the first admin can be granted without touching the database.
+    admin_emails: str = ""
+
     # ── Server ──────────────────────────────────────────────────
     host: str = "0.0.0.0"
     port: int = 8765
     log_level: str = "INFO"
 
-    # ── Stripe (SaaS only) ──────────────────────────────────────
-    stripe_secret_key: str | None = None
-    stripe_webhook_secret: str | None = None
-    stripe_price_pro: str | None = None
-    stripe_price_team: str | None = None
+    # Public base URL used to build links in outbound emails (verification,
+    # password reset). Must be the address a user's browser can reach — NOT
+    # ``0.0.0.0``. Override in SaaS, e.g. ``https://app.devmemory.io``.
+    app_base_url: str = "http://localhost:8765"
+
+    # ── Email ───────────────────────────────────────────────────
+    # Email is OPTIONAL and has two backends, auto-selected in this order:
+    #   1. SendGrid HTTP API  — if ``sendgrid_api_key`` is set (works on hosts
+    #      that block outbound SMTP, e.g. Render — it uses HTTPS/443).
+    #   2. SMTP               — if ``smtp_host`` is set.
+    #   3. Neither            — emails are logged, not sent, and verification is
+    #      not enforced (see ``email_enabled`` / ``enforce_email_verification``).
+    # ``smtp_from_email`` / ``smtp_from_name`` are the From identity for BOTH
+    # backends (for SendGrid single-sender, ``smtp_from_email`` must equal the
+    # verified sender address).
+    smtp_from_email: str = "no-reply@devmemory.io"
+    smtp_from_name: str = "DevMemory"
+
+    # SendGrid HTTP API
+    sendgrid_api_key: str | None = None
+
+    # SMTP
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True   # STARTTLS on connect (port 587)
+    smtp_use_ssl: bool = False  # implicit TLS (port 465); mutually exclusive with STARTTLS
+
+    # Token lifetimes
+    email_verification_expiry_hours: int = 24
+    password_reset_expiry_minutes: int = 30
+
+    # ── Cardano payments (SaaS only) ────────────────────────────
+    # Payments are taken in ADA on Cardano, detected via Blockfrost (a hosted
+    # Cardano API — no node to run). Flow: create an invoice with a unique
+    # expected amount, the user sends ADA to ``cardano_receive_address`` from
+    # any wallet, and the server polls Blockfrost to confirm the exact amount
+    # arrived. Leave ``blockfrost_project_id`` unset to disable payments.
+    blockfrost_project_id: str | None = None
+    # Network the wallet + Blockfrost project belong to. Build/test on ``preprod``
+    # (free faucet ADA), flip to ``mainnet`` for real payments.
+    blockfrost_network: str = "preprod"  # preprod | preview | mainnet
+    # Your wallet's ACCOUNT public key (CIP-5 ``acct_xvk1...``, exported once from
+    # Lace/Eternl). The server derives a fresh receiving address per invoice from
+    # it, so each payment is a clean round amount to a unique address — no odd
+    # amounts, and every address still belongs to your wallet.
+    cardano_account_xpub: str | None = None
+    # One-time upgrade prices, in whole ADA, per tier (round numbers on purpose).
+    cardano_price_pro_ada: float = 10.0
+    cardano_price_team_ada: float = 30.0
+    # How long an unpaid invoice stays valid, how many days an upgrade lasts, and
+    # how often the background poller checks pending invoices for payment.
+    cardano_invoice_expiry_minutes: int = 30
+    cardano_subscription_days: int = 30
+    cardano_poll_interval_seconds: int = 30
+    # DEV ONLY: allow the /billing/invoice/{id}/simulate-paid endpoint so the
+    # upgrade flow can be tested without a real on-chain payment. Never enable in
+    # production.
+    cardano_allow_test_payments: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -144,9 +217,43 @@ class Settings(BaseSettings):
         return self.deployment_mode == DeploymentMode.SELF_HOSTED
 
     @property
+    def blockfrost_base_url(self) -> str:
+        """Return the Blockfrost API base URL for the configured network."""
+        net = (self.blockfrost_network or "preprod").lower().strip()
+        return {
+            "mainnet": "https://cardano-mainnet.blockfrost.io/api/v0",
+            "preprod": "https://cardano-preprod.blockfrost.io/api/v0",
+            "preview": "https://cardano-preview.blockfrost.io/api/v0",
+        }.get(net, "https://cardano-preprod.blockfrost.io/api/v0")
+
+    @property
+    def admin_email_set(self) -> set[str]:
+        """Return the bootstrap admin emails, lowercased."""
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
+    @property
+    def payments_enabled(self) -> bool:
+        """Return True when Cardano payments are fully configured."""
+        return bool(self.blockfrost_project_id) and bool(self.cardano_account_xpub)
+
+    @property
     def database_is_sqlite(self) -> bool:
         """Return True when the configured database is SQLite."""
         return self.database_url.startswith("sqlite")
+
+    @property
+    def email_enabled(self) -> bool:
+        """Return True when any email backend (SendGrid or SMTP) is configured."""
+        return bool(self.sendgrid_api_key) or bool(self.smtp_host)
+
+    @property
+    def enforce_email_verification(self) -> bool:
+        """Block unverified logins only in SaaS mode with email actually wired.
+
+        Enforcing verification without a way to deliver the email would lock new
+        users out, so it is gated on both conditions.
+        """
+        return self.is_saas and self.email_enabled
 
 
 def get_project_root() -> Path:

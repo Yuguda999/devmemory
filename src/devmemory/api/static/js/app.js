@@ -1,4 +1,4 @@
-import { detectMode, isLoggedIn, logout, state } from './api.js';
+import { detectMode, isLoggedIn, logout, refreshMe, state } from './api.js';
 import { icon, confirmDialog } from './utils.js';
 import { renderLogin }     from './views/login.js';
 import { renderDashboard } from './views/dashboard.js';
@@ -7,21 +7,36 @@ import { renderSessions }  from './views/sessions.js';
 import { renderKeys }      from './views/keys.js';
 import { renderBilling }   from './views/billing.js';
 import { renderSetup }     from './views/setup.js';
+import { renderSettings }  from './views/settings.js';
+import { renderAdmin }     from './views/admin.js';
+import { renderForgot }    from './views/forgot.js';
+import { renderReset }     from './views/reset.js';
+import { renderVerify }    from './views/verify.js';
 
 const ROUTES = {
   '#login':     { label: 'Login',     render: renderLogin,    nav: false },
+  '#forgot':    { label: 'Forgot',    render: renderForgot,   nav: false },
+  '#reset':     { label: 'Reset',     render: renderReset,    nav: false },
+  '#verify':    { label: 'Verify',    render: renderVerify,   nav: false },
   '#dashboard': { label: 'Dashboard', render: renderDashboard, icon: 'layout-dashboard' },
   '#projects':  { label: 'Projects',  render: renderProjects,  icon: 'folder-git-2' },
   '#sessions':  { label: 'Sessions',  render: renderSessions,  icon: 'layers' },
   '#keys':      { label: 'API Keys',  render: renderKeys,      icon: 'key-round' },
   '#setup':     { label: 'Setup',     render: renderSetup,     icon: 'rocket' },
   '#billing':   { label: 'Billing',   render: renderBilling,   icon: 'credit-card' },
+  '#settings':  { label: 'Settings',  render: renderSettings,  icon: 'settings' },
+  '#admin':     { label: 'Admin',     render: renderAdmin,     icon: 'shield', admin: true },
 };
+
+// Reachable without being logged in (and rendered full-screen, no sidebar).
+const PUBLIC_ROUTES = ['#login', '#forgot', '#reset', '#verify'];
 
 /** Build or rebuild the sidebar to reflect current auth state */
 function buildSidebar() {
   const sidebar = document.getElementById('sidebar');
-  const navItems = Object.entries(ROUTES).filter(([,r]) => r.nav !== false);
+  const navItems = Object.entries(ROUTES).filter(
+    ([, r]) => r.nav !== false && (!r.admin || state.user?.is_admin)
+  );
 
   const showSignOut = isLoggedIn() && !state.selfHosted;
 
@@ -97,6 +112,11 @@ function ensureMobileChrome() {
 
 async function init() {
   await detectMode();
+  // Refresh the authoritative profile (incl. is_admin) so the sidebar can show
+  // the Admin link for superadmins. Best-effort — falls back to cached user.
+  if (isLoggedIn() && !state.selfHosted) {
+    try { await refreshMe(); } catch { /* keep cached user */ }
+  }
   buildSidebar();
   ensureMobileChrome();
 
@@ -110,9 +130,11 @@ function route() {
   const [hash, queryStr] = rawHash.split('?');
   const params = Object.fromEntries(new URLSearchParams(queryStr || ''));
 
-  // Auth guard
+  // Auth guard. Public routes (login + password/verify flows) are always
+  // reachable; everything else requires a session.
+  const isPublic = PUBLIC_ROUTES.includes(hash);
   if (!isLoggedIn()) {
-    if (hash !== '#login') { window.location.hash = '#login'; return; }
+    if (!isPublic) { window.location.hash = '#login'; return; }
   } else if (hash === '#login') {
     window.location.hash = '#dashboard'; return;
   }
@@ -126,8 +148,10 @@ function route() {
 
   const sidebar = document.getElementById('sidebar');
   const main = document.getElementById('main');
-  if (hash === '#login') {
-    // Login fills entire viewport — remove sidebar layout
+  // Public auth pages fill the whole viewport with no sidebar. When a logged-in
+  // user opens #verify (email-change confirm), keep the full-screen card too.
+  const fullScreen = isPublic;
+  if (fullScreen) {
     document.getElementById('app').style.display = 'block';
     sidebar.style.display = 'none';
     main.style.display = 'block';
@@ -139,11 +163,11 @@ function route() {
     target.render(main, params);
   }
 
-  // Mobile drawer: close on every navigation; hide the hamburger on login.
+  // Mobile drawer: close on every navigation; hide the hamburger on auth pages.
   sidebar.classList.remove('open');
   document.getElementById('sidebar-backdrop')?.classList.remove('show');
   const menuToggle = document.getElementById('menu-toggle');
-  if (menuToggle) menuToggle.style.display = (hash === '#login') ? 'none' : '';
+  if (menuToggle) menuToggle.style.display = fullScreen ? 'none' : '';
 }
 
 init();

@@ -91,6 +91,17 @@ def run() -> None:
         help="DevMemory REST server URL (for SaaS: https://api.devmemory.io)",
     )
     install_parser.add_argument(
+        "--config-dir",
+        dest="config_dir",
+        default=None,
+        help=(
+            "Claude Code only: target profile dir(s) to install into, "
+            "comma-separated for multiple (e.g. ~/.claude-work,~/.claude-personal). "
+            "Overrides CLAUDE_CONFIG_DIR. Omit to use CLAUDE_CONFIG_DIR or the "
+            "default ~/.claude.json."
+        ),
+    )
+    install_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be written without making changes",
@@ -123,6 +134,54 @@ def run() -> None:
         help="DevMemory REST server URL (default: http://localhost:8765)",
     )
 
+    # ── devmemory watch ────────────────────────────────────────────────────
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="Background daemon: auto-save Cursor/Cline/Kilo conversations",
+        description=(
+            "Tail local conversation stores of tools that don't pass a transcript "
+            "to a hook (Cursor, Cline, Kilo) and push new turns to DevMemory, so "
+            "context is saved without the model calling save_context."
+        ),
+    )
+    watch_parser.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        help="Seconds between polls (default: 30)",
+    )
+    watch_parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run a single poll and exit (useful for testing / cron)",
+    )
+    watch_parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Show per-tool support status and which stores are present, then exit",
+    )
+    watch_parser.add_argument(
+        "--install-service",
+        action="store_true",
+        help="Install + start watch as a background service (systemd/launchd), then exit",
+    )
+
+    # ── devmemory start / continue / stop / status ─────────────────────────
+    # The attach model: auto-save is scoped to one chosen project at a time.
+    for name, help_text in (
+        ("start", "Attach this tool to a project, restore its context, begin auto-saving"),
+        ("continue", "Re-attach the active project to a new tool and resume auto-saving"),
+    ):
+        p = subparsers.add_parser(name, help=help_text)
+        p.add_argument("--cwd", default=None, help="Project directory (default: current)")
+        p.add_argument("--tool", default=None, help="Tool being attached (e.g. cursor, claude)")
+        p.add_argument("--host", default=None, help="Backend URL (persisted to config)")
+        p.add_argument("--api-key", dest="api_key", default=None, help="API key (persisted)")
+
+    subparsers.add_parser("stop", help="Detach (stop auto-saving) and stop the watch daemon")
+    subparsers.add_parser("status", help="Show the active session and watch-daemon state")
+    subparsers.add_parser("mcp", help="Start the MCP server (stdio transport)")
+
     # ── Legacy flags (no subcommand = MCP or REST) ─────────────────────────
     parser.add_argument(
         "--rest",
@@ -151,6 +210,38 @@ def run() -> None:
         from devmemory.cli.inject import run_inject
 
         run_inject(args)
+    elif args.command == "watch":
+        import sys as _sys
+
+        if args.list:
+            from devmemory.watch.capabilities import render_status
+
+            print(render_status())
+            _sys.exit(0)
+
+        if args.install_service:
+            import os as _os
+
+            from devmemory.watch.service import install_service
+
+            ok, msg = install_service(host=_os.environ.get("DEVMEMORY_HOST"))
+            print(("✅ " if ok else "❌ ") + msg)
+            _sys.exit(0 if ok else 1)
+
+        from devmemory.watch.daemon import run as run_watch
+
+        _sys.exit(run_watch(interval=args.interval, once=args.once))
+    elif args.command in ("start", "continue", "stop", "status"):
+        from devmemory.cli import session
+
+        {
+            "start": session.run_start,
+            "continue": session.run_continue,
+            "stop": session.run_stop,
+            "status": session.run_status,
+        }[args.command](args)
+    elif args.command == "mcp":
+        run_mcp()
     elif args.rest:
         run_rest(host=args.host, port=args.port)
     else:

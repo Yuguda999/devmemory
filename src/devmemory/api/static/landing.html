@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevMemory — persistent memory for every AI coding tool</title>
+  <meta name="description" content="DevMemory keeps your coding context alive across every AI tool switch — Claude Code, Cursor, Windsurf, Codex and more. Deterministic auto-save, one attach command, self-hostable.">
+  <meta property="og:title" content="DevMemory — context that survives every tool switch">
+  <meta property="og:description" content="One memory layer for every AI coding tool. Deterministic auto-save, no copy-paste, self-hostable.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%236366f1'/><path d='M7 8h10M7 12h10M7 16h6' stroke='%23fff' stroke-width='2' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="/static/css/site.css">
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <div class="bg-field"></div>
+  <div class="bg-grid"></div>
+
+  <!-- ── Nav ─────────────────────────────────────────────────────────────── -->
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="/">
+        <svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
+            <stop stop-color="#818cf8"/><stop offset=".5" stop-color="#6366f1"/><stop offset="1" stop-color="#22d3ee"/>
+          </linearGradient></defs>
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lg)"/>
+          <path d="M9 11h14M9 16h14M9 21h8" stroke="#0a0b16" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        DevMemory
+      </a>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#tools">Tools</a>
+        <a href="/docs">Docs</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn btn-ghost" href="/app" style="height:40px;padding:0 16px;font-size:14px">Open app</a>
+        <button class="nav-toggle" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Hero ────────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="orb a"></div>
+    <div class="orb b"></div>
+    <div class="wrap">
+      <span class="badge"><span class="dot"></span> Works across 8+ AI coding tools</span>
+      <h1>Never lose context<br>when you <span class="grad-text">switch tools</span>.</h1>
+      <p class="lead">Your AI credits run out mid-task. You jump to another tool — and start from zero.
+        DevMemory saves your goals, decisions and code as you work, then restores them in the next tool. Deterministically.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="/docs">Get started
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <div class="copy-inline">
+          <a class="btn btn-ghost btn-lg" href="/app">Open dashboard</a>
+        </div>
+      </div>
+      <p class="hero-note">Free tier included · Self-hostable · No vendor lock-in</p>
+
+      <!-- Terminal -->
+      <div class="terminal reveal">
+        <div class="terminal-bar">
+          <span class="tdot"></span><span class="tdot"></span><span class="tdot"></span>
+          <span class="tname">~/projects/api — devmemory</span>
+        </div>
+        <div class="terminal-body">
+<div class="line"><span class="p">$</span> <span class="c">devmemory start</span></div>
+<div class="line"><span class="m">▶️  DevMemory attached to 'api' (acme-api) via cursor.</span></div>
+<div class="line"><span class="o">   Watch daemon running. Auto-save is ON for this project only.</span></div>
+<div class="line"> </div>
+<div class="line"><span class="o"># ...credits run out. Switch to Claude Code, then:</span></div>
+<div class="line"><span class="p">$</span> <span class="c">devmemory continue</span></div>
+<div class="line"><span class="g">⏩ Continuing 'api' (acme-api) in claude.</span></div>
+<div class="line"><span class="g">✅ Loaded prior context — 24 blocks. Picking up where you left off.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Logos ───────────────────────────────────────────────────────────── -->
+  <section id="tools" style="padding-top:0">
+    <div class="wrap">
+      <p class="section-head lead reveal" style="margin-bottom:26px">One memory layer for the tools you already use</p>
+      <div class="logos reveal">
+        <span class="logo-chip"><img src="/static/icons/claude-code.svg" alt=""> Claude Code</span>
+        <span class="logo-chip"><img src="/static/icons/cursor.svg" alt=""> Cursor</span>
+        <span class="logo-chip"><img src="/static/icons/windsurf.svg" alt=""> Windsurf</span>
+        <span class="logo-chip"><img src="/static/icons/codex.svg" alt=""> Codex</span>
+        <span class="logo-chip"><img src="/static/icons/cline.svg" alt=""> Cline</span>
+        <span class="logo-chip"><img src="/static/icons/kilo.svg" alt=""> Kilo</span>
+        <span class="logo-chip"><img src="/static/icons/augment.png" alt=""> Augment</span>
+        <span class="logo-chip"><img src="/static/icons/antigravity.svg" alt=""> Antigravity</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ────────────────────────────────────────────────────────── -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow">Why DevMemory</span>
+        <h2>Built so nothing is ever lost</h2>
+        <p class="lead">Saving your work can't depend on the model remembering to do it. So it doesn't.</p>
+      </div>
+      <div class="grid cols-3">
+        <div class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
+          <h3>Deterministic auto-save</h3>
+          <p>Saves each turn through OS-level hooks and a watch daemon — with zero reliance on the AI calling a tool. Your work is captured before the credits die.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 8-8V2l4 4-4 4V8a4 4 0 1 0 4 4"/></svg></div>
+          <h3>Continue anywhere</h3>
+          <p>One <code>devmemory continue</code> in a new tool restores your goals, decisions and next steps — a resume prompt tuned for that tool. No copy-paste.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+          <h3>Structured context</h3>
+          <p>Not a transcript dump. Typed blocks — goals, decisions, code, errors, next steps — so the next session reads intent, not noise.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13M9 13l12-2"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <h3>Opt-in, per project</h3>
+          <p>Auto-save is scoped to the one project you attach with <code>devmemory start</code>. Nothing saved until you say so — you're always in control.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg></div>
+          <h3>Self-hostable</h3>
+          <p>Run it locally on SQLite or scale on PostgreSQL. Your context stays on your infrastructure. No lock-in, MIT-licensed.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>Honest coverage</h3>
+          <p>We never fake support. <code>devmemory watch --list</code> shows the exact save mechanism per tool — hook, daemon, or MCP+rules.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How it works ────────────────────────────────────────────────────── -->
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow">How it works</span>
+        <h2>Three commands. That's it.</h2>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="num">1</div>
+          <h3>Install &amp; connect</h3>
+          <p>One command wires DevMemory into your tool via MCP + hooks. Python or Node — your choice.</p>
+        </div>
+        <div class="step reveal">
+          <div class="num">2</div>
+          <h3>Start a session</h3>
+          <p>Run <code>devmemory start</code> in your project. It attaches, restores context, and auto-saves as you work.</p>
+        </div>
+        <div class="step reveal">
+          <div class="num">3</div>
+          <h3>Switch freely</h3>
+          <p>Hit a wall in one tool? <code>devmemory continue</code> in the next — your context follows you.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA ─────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="wrap">
+      <div class="cta-band reveal">
+        <h2>Stop re-explaining your project<br>to every new tool.</h2>
+        <p>Set up DevMemory in under a minute and keep your context — across every switch, every credit reset.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-lg" href="/docs">Read the docs
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-ghost btn-lg" href="/app">Open dashboard</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ──────────────────────────────────────────────────────────── -->
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <a class="brand" href="/">
+        <svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lg)"/>
+          <path d="M9 11h14M9 16h14M9 21h8" stroke="#0a0b16" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        DevMemory
+      </a>
+      <div class="footer-links">
+        <a href="#features">Features</a>
+        <a href="/docs">Docs</a>
+        <a href="/app">Dashboard</a>
+        <a href="/docs#self-hosting">Self-host</a>
+      </div>
+      <div class="copy">© DevMemory — Universal dev memory for AI coding tools. MIT licensed.</div>
+    </div>
+  </footer>
+
+  <script src="/static/js/site.js"></script>
+</body>
+</html>

@@ -44,6 +44,79 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user_id: str
     email: str
+    display_name: str = ""
+    email_verified: bool = True
+
+
+# ── Account: profile, password, email, notifications ───────────
+
+
+class MeResponse(BaseModel):
+    """The authenticated user's account profile."""
+
+    id: str
+    email: str
+    display_name: str
+    email_verified: bool
+    tier: str
+    is_admin: bool = False
+    notification_prefs: dict[str, bool]
+    created_at: datetime
+
+
+class UpdateProfileRequest(BaseModel):
+    """Editable profile fields."""
+
+    display_name: str = Field(min_length=1, max_length=100)
+
+
+class ChangePasswordRequest(BaseModel):
+    """Change password while logged in."""
+
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class NotificationPrefsRequest(BaseModel):
+    """Toggle optional email notification categories."""
+
+    security_alerts: bool | None = None
+    account_events: bool | None = None
+
+
+class NotificationPrefsResponse(BaseModel):
+    """Current notification preferences."""
+
+    security_alerts: bool
+    account_events: bool
+
+
+# ── Auth: password reset + verification ────────────────────────
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Start the password-reset flow for an email address."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Complete a password reset using an emailed token."""
+
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    """Confirm an email address using an emailed token."""
+
+    token: str = Field(min_length=1)
+
+
+class ResendVerificationRequest(BaseModel):
+    """Re-send a verification email to an unverified address."""
+
+    email: EmailStr
 
 
 # ── API Keys ───────────────────────────────────────────────────
@@ -323,3 +396,88 @@ class BillingStatusResponse(BaseModel):
     tier: str
     limits: BillingLimits
     usage: BillingUsage
+
+
+# ── Cardano payments ───────────────────────────────────────────
+
+
+class UpgradeRequest(BaseModel):
+    """Request to upgrade to a paid tier via a Cardano payment."""
+
+    tier: str = Field(description="Target tier: 'pro' or 'team'")
+
+
+class InvoiceResponse(BaseModel):
+    """A Cardano payment invoice the user pays to upgrade."""
+
+    invoice_id: str
+    tier: str
+    status: str  # pending | paid | expired
+    network: str
+    pay_to_address: str
+    amount_lovelace: int
+    amount_ada: float
+    expires_at: str
+    tx_hash: str | None = None
+
+
+# ── Admin (superadmin panel) ───────────────────────────────────
+
+
+class AdminStatsResponse(BaseModel):
+    """Platform-wide counts for the admin overview."""
+
+    users_total: int
+    users_active: int
+    users_verified: int
+    tiers: dict[str, int]
+    projects: int
+    sessions: int
+    context_blocks: int
+    invoices_paid: int
+    invoices_pending: int
+    revenue_ada: float
+
+
+class AdminUserRow(BaseModel):
+    """One user row in the admin users table."""
+
+    id: str
+    email: str
+    display_name: str
+    tier: str
+    is_active: bool
+    is_admin: bool
+    email_verified: bool
+    projects: int
+    sessions: int
+    created_at: datetime
+
+
+class AdminUserList(BaseModel):
+    users: list[AdminUserRow]
+    total: int
+
+
+class AdminUpdateUserRequest(BaseModel):
+    """Admin-editable fields on a user (all optional)."""
+
+    tier: str | None = None  # free | pro | team
+    is_active: bool | None = None
+    is_admin: bool | None = None
+
+
+class AdminInvoiceRow(BaseModel):
+    id: str
+    user_email: str
+    tier: str
+    status: str
+    amount_ada: float
+    network: str
+    tx_hash: str | None
+    created_at: datetime
+
+
+class AdminInvoiceList(BaseModel):
+    invoices: list[AdminInvoiceRow]
+    total: int

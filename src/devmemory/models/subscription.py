@@ -46,9 +46,10 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(20), default=SubscriptionStatus.ACTIVE.value, nullable=False
     )
 
-    # Stripe fields — null for self-hosted
-    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Cardano payment fields — null for free tier / self-hosted. ``last_tx_hash``
+    # is the on-chain transaction that most recently paid for this tier.
+    last_invoice_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    last_tx_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     current_period_start: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
