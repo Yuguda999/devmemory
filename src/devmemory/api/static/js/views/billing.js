@@ -65,9 +65,6 @@ export async function renderBilling(container) {
         </div>
       </div>
 
-      <!-- Payment panel (populated when an upgrade is started) -->
-      <div id="pay-panel"></div>
-
       <!-- Limits comparison table -->
       <div class="card" style="margin-top:16px">
         <div class="section-title" style="margin-bottom:16px">Plan Comparison</div>
@@ -108,10 +105,35 @@ export async function renderBilling(container) {
   }
 }
 
+function openPayModal(inner) {
+  closePayModal();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'confirm-backdrop';
+  backdrop.id = 'pay-backdrop';
+  backdrop.innerHTML = `
+    <div class="pay-modal" role="dialog" aria-modal="true" aria-labelledby="pay-modal-title">
+      <button class="pay-modal-close" id="pay-modal-close" aria-label="Close">${icon('x', 18)}</button>
+      <div id="pay-modal-body">${inner}</div>
+    </div>
+  `;
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closePayModal(); });
+  document.addEventListener('keydown', onPayKey);
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('#pay-modal-close').addEventListener('click', () => closePayModal());
+  return backdrop.querySelector('#pay-modal-body');
+}
+
+function onPayKey(e) { if (e.key === 'Escape') closePayModal(); }
+
+function closePayModal() {
+  stopPolling();
+  document.removeEventListener('keydown', onPayKey);
+  const b = document.getElementById('pay-backdrop');
+  if (b) { b.classList.add('closing'); setTimeout(() => b.remove(), 120); }
+}
+
 async function startUpgrade(tier) {
-  const panel = document.getElementById('pay-panel');
-  if (!panel) return;
-  panel.innerHTML = `<div class="card" style="margin-top:16px">${spinner()}</div>`;
+  const bodyEl = openPayModal(`<div style="padding:20px 0">${spinner()}</div>`);
   try {
     const inv = await api.post('/billing/upgrade', { tier });
     renderPayPanel(inv);
@@ -120,7 +142,7 @@ async function startUpgrade(tier) {
     const msg = /not configured/i.test(err.message)
       ? 'Cardano payments are not enabled on this server yet.'
       : err.message;
-    panel.innerHTML = `<div class="card" style="margin-top:16px">${emptyState('alert-triangle', 'Could not start upgrade', msg)}</div>`;
+    if (bodyEl) bodyEl.innerHTML = emptyState('alert-triangle', 'Could not start upgrade', msg);
   }
 }
 
@@ -128,37 +150,36 @@ let _pollTimer = null;
 let _countdownTimer = null;
 
 function renderPayPanel(inv) {
-  const panel = document.getElementById('pay-panel');
+  const panel = document.getElementById('pay-modal-body');
+  if (!panel) return;
   const ada = (Math.round(inv.amount_ada * 1e6) / 1e6).toString();
   const devMode = localStorage.getItem('dm_dev') === '1';
 
   panel.innerHTML = `
-    <div class="card" style="margin-top:16px;max-width:520px">
-      <div class="card-title">Complete your upgrade to ${inv.tier.toUpperCase()}</div>
-      <div style="font-size:12.5px;color:var(--text-secondary);margin:6px 0 18px">
-        Send the exact amount to this address on <b>${inv.network}</b>. It confirms automatically.
-      </div>
+    <div class="card-title" id="pay-modal-title">Complete your upgrade to ${inv.tier.toUpperCase()}</div>
+    <div style="font-size:12.5px;color:var(--text-secondary);margin:6px 0 18px">
+      Send the exact amount to this address on <b>${inv.network}</b>. It confirms automatically.
+    </div>
 
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">AMOUNT</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
-        <div style="flex:1;font-size:22px;font-weight:700">${ada} <span style="font-size:14px;color:var(--text-muted)">ADA</span></div>
-        <button class="btn btn-ghost btn-sm" data-copy="${ada}" title="Copy amount">${icon('copy',15)}</button>
-      </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">AMOUNT</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <div style="flex:1;font-size:22px;font-weight:700">${ada} <span style="font-size:14px;color:var(--text-muted)">ADA</span></div>
+      <button class="btn btn-ghost btn-sm" data-copy="${ada}" title="Copy amount">${icon('copy',15)}</button>
+    </div>
 
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">TO ADDRESS</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:18px">
-        <code style="flex:1;background:var(--bg-elevated);padding:10px 12px;border-radius:var(--radius-sm);word-break:break-all;font-size:12px">${inv.pay_to_address}</code>
-        <button class="btn btn-ghost btn-sm" data-copy="${inv.pay_to_address}" title="Copy address">${icon('copy',15)}</button>
-      </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">TO ADDRESS</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:18px">
+      <code style="flex:1;background:var(--bg-base);padding:10px 12px;border-radius:var(--radius-sm);word-break:break-all;font-size:12px">${inv.pay_to_address}</code>
+      <button class="btn btn-ghost btn-sm" data-copy="${inv.pay_to_address}" title="Copy address">${icon('copy',15)}</button>
+    </div>
 
-      <div style="display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid var(--border)">
-        <div class="spinner-dot" style="width:9px;height:9px;border-radius:50%;background:var(--blue);flex:none;animation:pulse 1.4s ease-in-out infinite"></div>
-        <div style="flex:1">
-          <div id="pay-status" style="font-size:13px;font-weight:500">Waiting for payment…</div>
-          <div id="pay-expiry" style="font-size:11.5px;color:var(--text-muted)"></div>
-        </div>
-        ${devMode ? `<button class="btn btn-ghost btn-sm" id="sim-pay">Simulate (dev)</button>` : ''}
+    <div style="display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid var(--border)">
+      <div class="spinner-dot" style="width:9px;height:9px;border-radius:50%;background:var(--blue);flex:none;animation:pulse 1.4s ease-in-out infinite"></div>
+      <div style="flex:1">
+        <div id="pay-status" style="font-size:13px;font-weight:500">Waiting for payment…</div>
+        <div id="pay-expiry" style="font-size:11.5px;color:var(--text-muted)"></div>
       </div>
+      ${devMode ? `<button class="btn btn-ghost btn-sm" id="sim-pay">Simulate (dev)</button>` : ''}
     </div>
     <style>@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}</style>
   `;
@@ -171,7 +192,7 @@ function renderPayPanel(inv) {
 
   const finish = (res) => {
     if (res.status === 'paid') {
-      stopPolling();
+      closePayModal();
       toast(`Payment confirmed — upgraded to ${res.tier.toUpperCase()}!`);
       setTimeout(() => renderBilling(document.getElementById('main')), 800);
       return true;
